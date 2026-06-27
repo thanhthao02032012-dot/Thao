@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // Users can read/write their own document
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /{document=**} {
+      // Let's keep it simple: any logged-in user can read all users (for admin page demo purposes)
+      // In a real app, this should be restricted to admins only based on a role field.
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
