@@ -43,6 +43,7 @@ export interface UserSession {
   os: string;
   ip?: string;
   lastLogin: number;
+  isCurrent?: boolean;
 }
 
 export interface EditRecord {

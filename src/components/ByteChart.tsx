@@ -10,13 +10,15 @@ export default function ByteChart({ file, editedData }: ByteChartProps) {
   const [originalData, setOriginalData] = React.useState<Uint8Array | null>(null);
 
   React.useEffect(() => {
+    // Slice up to 5MB to prevent memory crash for large files
+    const slice = file.slice(0, 5 * 1024 * 1024);
     const reader = new FileReader();
     reader.onload = (e) => {
       if (e.target?.result) {
         setOriginalData(new Uint8Array(e.target.result as ArrayBuffer));
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsArrayBuffer(slice);
   }, [file]);
 
   const activeData = editedData || originalData;

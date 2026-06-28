@@ -2,17 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { FileUp, LogOut, ShieldAlert, Monitor, Home } from 'lucide-react';
+import { FileUp, LogOut, ShieldAlert, Monitor, Home, Loader2 } from 'lucide-react';
 import Auth from './components/Auth';
 import Workspace from './components/Workspace';
 import Dashboard from './components/Dashboard';
 import { UserProfile, UserSession } from './types';
+import { motion, AnimatePresence } from 'motion/react';
+import { addRecentFile } from './utils/stats';
+import { storeFile } from './utils/db';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [banned, setBanned] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'workspace'>('auth');
 
@@ -72,16 +77,107 @@ export default function App() {
 
   const handleLogout = () => {
     signOut(auth);
-    setSelectedFile(null);
+    handleCloseWorkspace();
     setBanned(false);
     setView('auth');
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
+  const handleUploadAndOpen = async (file: File) => {
+    setUploading(true);
+    try {
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB Chunks
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+      // Step 1: Initialize session on server
+      const initRes = await fetch('/api/file/upload/init', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          filesize: file.size
+        })
+      });
+
+      if (!initRes.ok) {
+        throw new Error('Failed to initialize chunked session');
+      }
+
+      const { fileId } = await initRes.json();
+
+      // Step 2: Upload chunks sequentially
+      let finalData = null;
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunkBlob = file.slice(start, end);
+
+        const chunkRes = await fetch(`/api/file/upload/chunk?fileId=${fileId}&chunkIndex=${chunkIndex}&totalChunks=${totalChunks}&filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream'
+          },
+          body: chunkBlob
+        });
+
+        if (!chunkRes.ok) {
+          throw new Error(`Failed to transmit chunk ${chunkIndex + 1}/${totalChunks}`);
+        }
+
+        if (chunkIndex === totalChunks - 1) {
+          finalData = await chunkRes.json();
+        }
+      }
+
+      if (!finalData || !finalData.fileId) {
+        throw new Error('Upload finalized but metadata was invalid');
+      }
+
+      setFileId(finalData.fileId);
+      setSelectedFile(file);
       setView('workspace');
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Không thể tải tệp tin lên máy chủ! Đã xảy ra lỗi khi phân đoạn.");
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (user) {
+        const generatedId = addRecentFile(user.uid, file.name, file.size, file.type);
+        // Skip storing massive files (e.g. > 100MB) to prevent IndexedDB writing freeze
+        if (file.size <= 100 * 1024 * 1024) {
+          try {
+            await storeFile(generatedId, file);
+          } catch (err) {
+            console.error("Failed to store file in offline DB:", err);
+          }
+        }
+      }
+      await handleUploadAndOpen(file);
+    }
+  };
+
+  const handleCloseWorkspace = async () => {
+    if (fileId) {
+      try {
+        await fetch('/api/file/close', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId })
+        });
+      } catch (err) {
+        console.error('Failed to close server file session:', err);
+      }
+    }
+    setSelectedFile(null);
+    setFileId(null);
+    setView('dashboard');
   };
 
   if (loading) {
@@ -114,8 +210,24 @@ export default function App() {
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col relative overflow-hidden">
       {/* Background decorations for all views */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/10 blur-[100px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/10 blur-[100px]"></div>
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.5, 0.3],
+            rotate: [0, 90, 0]
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-600/20 blur-[120px]"
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.3, 1],
+            opacity: [0.2, 0.4, 0.2],
+            rotate: [0, -90, 0]
+          }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/20 blur-[120px]"
+        />
       </div>
 
       {!user ? (
@@ -136,7 +248,7 @@ export default function App() {
             <div className="flex items-center space-x-2 sm:space-x-4">
               {view === 'workspace' && (
                 <button
-                  onClick={() => { setView('dashboard'); setSelectedFile(null); }}
+                  onClick={handleCloseWorkspace}
                   className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors"
                 >
                   <Home className="w-4 h-4 sm:mr-2" />
@@ -167,25 +279,57 @@ export default function App() {
 
           {/* Main Content Area */}
           <div className="flex-1 flex overflow-hidden z-10 relative">
-            {view === 'dashboard' && (
-              <Dashboard 
-                user={user} 
-                profile={userProfile} 
-                onLogout={handleLogout}
-                onOpenFile={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.onchange = (e: any) => handleFileChange(e);
-                  input.click();
-                }}
-              />
-            )}
-            
-            {view === 'workspace' && selectedFile && (
-              <Workspace file={selectedFile} onClose={() => { setSelectedFile(null); setView('dashboard'); }} />
-            )}
+            <AnimatePresence mode="wait">
+              {view === 'dashboard' && (
+                <motion.div 
+                  key="dashboard"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex-1 flex w-full h-full"
+                >
+                  <Dashboard 
+                    user={user} 
+                    profile={userProfile} 
+                    onLogout={handleLogout}
+                    onOpenFile={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.onchange = (e: any) => handleFileChange(e);
+                      input.click();
+                    }}
+                    onOpenCloudFile={async (file) => {
+                      await handleUploadAndOpen(file);
+                    }}
+                  />
+                </motion.div>
+              )}
+              
+              {view === 'workspace' && selectedFile && fileId && (
+                <motion.div 
+                  key="workspace"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex-1 flex w-full h-full"
+                >
+                  <Workspace file={selectedFile} fileId={fileId} onClose={handleCloseWorkspace} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </>
+      )}
+
+      {/* Global uploading screen overlay */}
+      {uploading && (
+        <div className="fixed inset-0 bg-[#0B0F19]/90 backdrop-blur-md flex flex-col items-center justify-center z-50">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_24px_rgba(168,85,247,0.4)]"></div>
+          <h3 className="text-xl font-semibold text-white mb-2">Đang xử lý tệp tin...</h3>
+          <p className="text-sm text-white/60">Tải dữ liệu trực tiếp lên máy chủ để xử lý tối ưu</p>
+        </div>
       )}
     </div>
   );

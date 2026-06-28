@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "High-Performance Hex Editor",
+  "description": "An optimized full-stack Hex Editor utilizing server-side streaming chunking, direct-to-disk editing, and HTML5 Canvas virtual scrolling.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { auth, googleProvider, facebookProvider, githubProvider, db } from '../firebase';
+import { auth, googleProvider, githubProvider, db } from '../firebase';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -8,8 +8,9 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { Lock, Mail, Github, Facebook, Chrome, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, Github, Chrome, ArrowRight, ShieldAlert } from 'lucide-react';
 import { UserProfile } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function Auth({ onSuccess }: { onSuccess: () => void }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -139,14 +140,24 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto relative z-10">
-      <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl p-8 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="w-full max-w-md mx-auto relative z-10"
+    >
+      <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-50"></div>
         
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-purple-500/30">
+        <div className="text-center mb-8 relative z-10">
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-purple-500/30"
+          >
             <span className="font-mono font-bold text-white text-2xl tracking-tighter">Hx</span>
-          </div>
+          </motion.div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
             {isForgotPassword ? 'Khôi phục mật khẩu' : (isLogin ? 'Đăng nhập vào hệ thống' : 'Tạo tài khoản mới')}
           </h2>
@@ -183,13 +194,6 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
               className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium"
             >
               <Github className="w-5 h-5 mr-3" /> Tiếp tục với GitHub
-            </button>
-            <button 
-              onClick={() => handleProviderSignIn(facebookProvider, 'Facebook')}
-              type="button" 
-              className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium"
-            >
-              <Facebook className="w-5 h-5 mr-3 text-blue-500" /> Tiếp tục với Facebook
             </button>
 
             <div className="relative py-4">
@@ -304,6 +308,6 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

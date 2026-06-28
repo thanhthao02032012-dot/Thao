@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { PenTool, CheckCircle, AlertTriangle } from 'lucide-react';
+import { auth } from '../firebase';
+import { incrementStat } from '../utils/stats';
 
 interface SignatureEditorProps {
   data: Uint8Array | null;
@@ -47,6 +49,10 @@ export default function SignatureEditor({ data, onDataChange }: SignatureEditorP
     onDataChange(newData);
     setSuccess(`Đã thêm chữ ký thành công (${sigBytes.length} bytes) vào cuối file.`);
     setSignature('');
+    
+    if (auth.currentUser) {
+      incrementStat(auth.currentUser.uid, 'digitalSignatures');
+    }
     
     setTimeout(() => setSuccess(''), 4000);
   };

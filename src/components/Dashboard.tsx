@@ -4,15 +4,19 @@ import { collection, query, where, getDocs, doc, updateDoc, orderBy, limit } fro
 import { db } from '../firebase';
 import { UserProfile, UserStats, FileMeta, UserSession } from '../types';
 import { Settings, FileText, HardDrive, Edit3, BarChart2, CheckCircle, Clock, Smartphone, Globe, LogOut, ChevronRight, User as UserIcon, Monitor } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { getStats, getRecentFiles } from '../utils/stats';
+import { getFile, clearAllFiles } from '../utils/db';
 
 interface DashboardProps {
   user: User;
   profile: UserProfile | null;
   onLogout: () => void;
   onOpenFile: () => void;
+  onOpenCloudFile?: (file: File) => void;
 }
 
-export default function Dashboard({ user, profile, onLogout, onOpenFile }: DashboardProps) {
+export default function Dashboard({ user, profile, onLogout, onOpenFile, onOpenCloudFile }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'files' | 'settings'>('overview');
   const [stats, setStats] = useState<UserStats>({
     filesUploaded: 0,
@@ -28,38 +32,55 @@ export default function Dashboard({ user, profile, onLogout, onOpenFile }: Dashb
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Mock fetching stats, in a real app this comes from Firestore subcollections
-    // For now we'll simulate it based on user creation time
-    const fakeStats = {
-      filesUploaded: Math.floor(Math.random() * 50),
-      hexEdits: Math.floor(Math.random() * 1000),
-      bitEdits: Math.floor(Math.random() * 500),
-      hashesGenerated: Math.floor(Math.random() * 100),
-      digitalSignatures: Math.floor(Math.random() * 20),
-      storageUsed: Math.floor(Math.random() * 500) * 1024 * 1024 // 0-500MB
+    const fetchDashboardData = async () => {
+      // Get Real Stats
+      const realStats = getStats(user.uid);
+      setStats(realStats);
+
+      // Get Real Recent Files
+      const realFiles = getRecentFiles(user.uid);
+      setRecentFiles(realFiles);
+
+      // Simple real-time user session based on current environment
+      const fakeSessions: UserSession[] = [
+        { 
+          id: '1', 
+          uid: user.uid, 
+          device: navigator.platform || 'Thiết bị hiện tại', 
+          browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Firefox') ? 'Firefox' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Trình duyệt Web', 
+          os: navigator.userAgent.includes('Windows') ? 'Windows' : navigator.userAgent.includes('Mac') ? 'macOS' : navigator.userAgent.includes('Linux') ? 'Linux' : 'Hệ điều hành', 
+          ip: '127.0.0.1', 
+          lastLogin: Date.now(), 
+          isCurrent: true 
+        }
+      ];
+      setSessions(fakeSessions);
+
+      setLoading(false);
     };
-    setStats(fakeStats);
 
-    // Mock Recent Files
-    const fakeFiles: FileMeta[] = Array.from({ length: 5 }).map((_, i) => ({
-      id: `file-${i}`,
-      uid: user.uid,
-      name: `analysis_result_${i}.bin`,
-      size: Math.floor(Math.random() * 5000000),
-      type: 'application/octet-stream',
-      uploadedAt: Date.now() - (i * 86400000)
-    }));
-    setRecentFiles(fakeFiles);
-
-    // Mock Sessions
-    const fakeSessions: UserSession[] = [
-      { id: '1', uid: user.uid, device: 'MacBook Pro', browser: 'Chrome', os: 'macOS', ip: '192.168.1.1', lastLogin: Date.now(), isCurrent: true },
-      { id: '2', uid: user.uid, device: 'iPhone 13', browser: 'Safari', os: 'iOS', ip: '192.168.1.2', lastLogin: Date.now() - 86400000 }
-    ];
-    setSessions(fakeSessions);
-
-    setLoading(false);
+    fetchDashboardData();
   }, [user]);
+
+  const handleOpenRecentFile = async (fileMeta: FileMeta) => {
+    try {
+      const file = await getFile(fileMeta.id);
+      if (file) {
+        if (onOpenCloudFile) {
+          onOpenCloudFile(file);
+        }
+      } else {
+        if (fileMeta.size > 100 * 1024 * 1024) {
+          alert(`Tệp tin "${fileMeta.name}" (${formatBytes(fileMeta.size)}) có dung lượng quá lớn (> 100MB) nên không được lưu trữ trong bộ nhớ đệm tạm thời của trình duyệt để tránh tràn bộ nhớ.\n\nVui lòng mở trực tiếp tệp tin này từ máy tính của bạn bằng nút "Mở File" để tiếp tục xem và chỉnh sửa với hiệu năng tối đa.`);
+        } else {
+          alert("Không tìm thấy tệp tin này trong bộ nhớ cục bộ. Có thể tệp đã bị xóa khỏi trình duyệt hoặc lịch sử.");
+        }
+      }
+    } catch (error) {
+      console.error("Error reopening recent file:", error);
+      alert("Lỗi khi mở lại tệp tin!");
+    }
+  };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -184,71 +205,182 @@ export default function Dashboard({ user, profile, onLogout, onOpenFile }: Dashb
           </div>
         ) : (
           <div className="space-y-8 relative">
-            
-            {activeTab === 'overview' && (
-              <>
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <StatCard icon={<FileText />} title="Files Uploaded" value={stats.filesUploaded} color="blue" />
-                  <StatCard icon={<Edit3 />} title="Hex Edits" value={stats.hexEdits} color="purple" />
-                  <StatCard icon={<BarChart2 />} title="Bit Edits" value={stats.bitEdits} color="green" />
-                  <StatCard icon={<CheckCircle />} title="Hashes Generated" value={stats.hashesGenerated} color="orange" />
-                  <StatCard icon={<Settings />} title="Digital Signatures" value={stats.digitalSignatures} color="pink" />
-                  <StatCard icon={<HardDrive />} title="Storage Used" value={formatBytes(stats.storageUsed)} color="cyan" />
-                </div>
-
-                {/* Recent Files Table */}
-                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden">
-                  <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-white">Recent Files (Cloud Sync)</h3>
-                    <button onClick={() => setActiveTab('files')} className="text-sm text-blue-400 hover:text-blue-300 flex items-center">
-                      Xem tất cả <ChevronRight className="w-4 h-4 ml-1" />
-                    </button>
+            <AnimatePresence mode="wait">
+              {activeTab === 'overview' && (
+                <motion.div 
+                  key="overview"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-8"
+                >
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <StatCard icon={<FileText />} title="Files Uploaded" value={stats.filesUploaded} color="blue" />
+                    <StatCard icon={<Edit3 />} title="Hex Edits" value={stats.hexEdits} color="purple" />
+                    <StatCard icon={<BarChart2 />} title="Bit Edits" value={stats.bitEdits} color="green" />
+                    <StatCard icon={<CheckCircle />} title="Hashes Generated" value={stats.hashesGenerated} color="orange" />
+                    <StatCard icon={<Settings />} title="Digital Signatures" value={stats.digitalSignatures} color="pink" />
+                    <StatCard icon={<HardDrive />} title="Storage Used" value={formatBytes(stats.storageUsed)} color="cyan" />
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
-                          <th className="px-6 py-3 font-medium">Tên file</th>
-                          <th className="px-6 py-3 font-medium">Kích thước</th>
-                          <th className="px-6 py-3 font-medium">Lần cuối</th>
-                          <th className="px-6 py-3 font-medium">Hành động</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5 text-sm text-white/80">
-                        {recentFiles.map(file => (
-                          <tr key={file.id} className="hover:bg-white/5 transition-colors">
-                            <td className="px-6 py-4 flex items-center">
-                              <FileText className="w-4 h-4 mr-3 text-blue-400" />
-                              {file.name}
-                            </td>
-                            <td className="px-6 py-4 text-white/60">{formatBytes(file.size)}</td>
-                            <td className="px-6 py-4 text-white/60">{formatDate(file.uploadedAt)}</td>
-                            <td className="px-6 py-4">
-                              <button className="text-purple-400 hover:text-purple-300 font-medium">Mở lại</button>
-                            </td>
+
+                  {/* Recent Files Table */}
+                  <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_0_rgba(0,0,0,0.2)]">
+                    <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center">
+                      <h3 className="text-lg font-semibold text-white">Recent Files (Cloud Sync)</h3>
+                      <button onClick={() => setActiveTab('files')} className="text-sm text-blue-400 hover:text-blue-300 flex items-center">
+                        Xem tất cả <ChevronRight className="w-4 h-4 ml-1" />
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
+                            <th className="px-6 py-3 font-medium">Tên file</th>
+                            <th className="px-6 py-3 font-medium">Kích thước</th>
+                            <th className="px-6 py-3 font-medium">Lần cuối</th>
+                            <th className="px-6 py-3 font-medium">Hành động</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-sm text-white/80">
+                          {recentFiles.map(file => (
+                            <tr 
+                              key={file.id} 
+                              onClick={() => handleOpenRecentFile(file)}
+                              className="hover:bg-white/5 transition-colors cursor-pointer group"
+                            >
+                              <td className="px-6 py-4 flex items-center">
+                                <FileText className="w-4 h-4 mr-3 text-blue-400 group-hover:scale-110 transition-transform" />
+                                {file.name}
+                              </td>
+                              <td className="px-6 py-4 text-white/60">{formatBytes(file.size)}</td>
+                              <td className="px-6 py-4 text-white/60">{formatDate(file.uploadedAt)}</td>
+                              <td className="px-6 py-4">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenRecentFile(file);
+                                  }}
+                                  className="text-purple-400 hover:text-purple-300 font-medium hover:underline"
+                                >
+                                  Mở lại
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </motion.div>
+              )}
 
-            {activeTab === 'files' && (
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center text-white/60 py-20">
-                <HardDrive className="w-16 h-16 mx-auto mb-4 text-white/20" />
-                <h3 className="text-xl font-medium text-white mb-2">Cloud Storage (Đồng bộ)</h3>
-                <p className="max-w-md mx-auto mb-6">Bạn có thể lưu trữ tối đa 100 files trên Cloud. Các files được đồng bộ giữa các thiết bị của bạn.</p>
-                <button onClick={onOpenFile} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
-                  Tải file mới lên
-                </button>
-              </div>
-            )}
+              {activeTab === 'files' && (
+                <motion.div 
+                  key="files"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-[0_4px_24px_0_rgba(0,0,0,0.2)]">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-white/10 pb-4 mb-4">
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">Lịch sử tệp tin ngoại tuyến</h3>
+                        <p className="text-white/50 text-sm mt-1">Danh sách các tệp tin bạn đã chỉnh sửa cục bộ trên thiết bị này. Dữ liệu của bạn được giữ an toàn 100% offline.</p>
+                      </div>
+                      {recentFiles.length > 0 && (
+                        <button 
+                          onClick={async () => {
+                            if (confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử tệp và thống kê ngoại tuyến?')) {
+                              localStorage.removeItem(`webhex_files_${user.uid}`);
+                              localStorage.removeItem(`webhex_stats_${user.uid}`);
+                              await clearAllFiles();
+                              setRecentFiles([]);
+                              setStats({
+                                filesUploaded: 0,
+                                hexEdits: 0,
+                                bitEdits: 0,
+                                hashesGenerated: 0,
+                                digitalSignatures: 0,
+                                storageUsed: 0
+                              });
+                            }
+                          }}
+                          className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm font-medium border border-red-500/20 transition-all self-start sm:self-auto"
+                        >
+                          Xóa lịch sử
+                        </button>
+                      )}
+                    </div>
 
-            {activeTab === 'settings' && (
-              <div className="space-y-6">
+                    {recentFiles.length === 0 ? (
+                      <div className="py-16 text-center text-white/40">
+                        <HardDrive className="w-16 h-16 mx-auto mb-4 opacity-25" />
+                        <p className="text-lg font-medium mb-1">Chưa có tệp tin nào được mở</p>
+                        <p className="text-sm max-w-sm mx-auto mb-6">Mở một tệp tin bất kỳ từ thiết bị của bạn để bắt đầu chỉnh sửa Hex và xem lịch sử ở đây.</p>
+                        <button onClick={onOpenFile} className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:from-blue-500 hover:to-purple-500 transition-all shadow-lg shadow-purple-500/20">
+                          Mở tệp tin đầu tiên
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-white/5 text-white/50 text-xs uppercase tracking-wider">
+                              <th className="px-6 py-3 font-medium">Tên file</th>
+                              <th className="px-6 py-3 font-medium">Kích thước</th>
+                              <th className="px-6 py-3 font-medium">Định dạng</th>
+                              <th className="px-6 py-3 font-medium">Thời gian mở</th>
+                              <th className="px-6 py-3 font-medium">Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-sm text-white/80">
+                            {recentFiles.map(file => (
+                              <tr 
+                                key={file.id} 
+                                onClick={() => handleOpenRecentFile(file)}
+                                className="hover:bg-white/5 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-6 py-4 flex items-center font-medium">
+                                  <FileText className="w-4 h-4 mr-3 text-blue-400 group-hover:scale-110 transition-transform" />
+                                  {file.name}
+                                </td>
+                                <td className="px-6 py-4 text-white/60">{formatBytes(file.size)}</td>
+                                <td className="px-6 py-4 text-white/50 font-mono text-xs">{file.type || 'unknown'}</td>
+                                <td className="px-6 py-4 text-white/60">{formatDate(file.uploadedAt)}</td>
+                                <td className="px-6 py-4">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenRecentFile(file);
+                                    }}
+                                    className="text-purple-400 hover:text-purple-300 font-medium hover:underline"
+                                  >
+                                    Mở lại
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'settings' && (
+                <motion.div 
+                  key="settings"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
                 
                 {/* Profile Settings */}
                 <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6">
@@ -312,9 +444,10 @@ export default function Dashboard({ user, profile, onLogout, onOpenFile }: Dashb
                   </button>
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
+            </AnimatePresence>
           </div>
         )}
       </main>
