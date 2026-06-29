@@ -12,12 +12,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { addRecentFile } from './utils/stats';
 import { storeFile } from './utils/db';
 import { useUI } from './components/UIProvider';
+import { useLanguage } from './components/LanguageProvider';
 
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import UserProfileView from './components/UserProfile';
 
 export default function App() {
   const { toast } = useUI();
+  const { language, setLanguage, t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -192,6 +194,18 @@ export default function App() {
             </div>
             
             <div className="flex items-center space-x-2 sm:space-x-4">
+              {/* Language Switcher */}
+              <button
+                onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150 active:scale-95 shrink-0"
+                title={language === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+              >
+                <span className="text-sm leading-none">{language === 'vi' ? '🇻🇳' : '🇬🇧'}</span>
+                <span className="uppercase font-mono text-[10px] tracking-wider leading-none">{language === 'vi' ? 'VI' : 'EN'}</span>
+              </button>
+
+              <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
+
               {(view === 'workspace' || view === 'profile') && (
                 <button
                   onClick={() => {
@@ -204,13 +218,13 @@ export default function App() {
                   className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
                 >
                   <Home className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Về Dashboard</span>
+                  <span className="hidden sm:inline">{t('backToDashboard')}</span>
                 </button>
               )}
               {view === 'dashboard' && (
                 <label className="flex items-center px-2 sm:px-4 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-md transition-colors text-xs sm:text-sm font-semibold cursor-pointer border border-blue-500/30">
                   <FileUp className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Mở File</span>
+                  <span className="hidden sm:inline">{t('openFile')}</span>
                   <input type="file" className="hidden" onChange={handleFileChange} />
                 </label>
               )}

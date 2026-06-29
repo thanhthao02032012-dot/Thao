@@ -11,8 +11,10 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Lock, Mail, Github, Chrome, ArrowRight, ShieldAlert } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { useLanguage } from './LanguageProvider';
 
 export default function Auth({ onSuccess }: { onSuccess: () => void }) {
+  const { language, t } = useLanguage();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -86,7 +88,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
 
     if (requiresCaptcha) {
       if (parseInt(captchaAnswer) !== captchaQuestion.a + captchaQuestion.b) {
-        setError('Mã CAPTCHA không chính xác. Vui lòng thử lại.');
+        setError(language === 'vi' ? 'Mã CAPTCHA không chính xác. Vui lòng thử lại.' : 'Incorrect CAPTCHA answer. Please try again.');
         generateCaptcha();
         return;
       }
@@ -97,7 +99,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
     try {
       if (isForgotPassword) {
         await sendPasswordResetEmail(auth, email);
-        setSuccessMsg('Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư của bạn.');
+        setSuccessMsg(language === 'vi' ? 'Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư của bạn.' : 'Password reset email sent. Please check your inbox.');
         setIsForgotPassword(false);
         setLoading(false);
         return;
@@ -126,13 +128,13 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
       setRequiresCaptcha(false);
       onSuccess();
     } catch (err: any) {
-      let friendlyMessage = err.message || 'Đã xảy ra lỗi';
+      let friendlyMessage = err.message || (language === 'vi' ? 'Đã xảy ra lỗi' : 'An error occurred');
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        friendlyMessage = 'Email hoặc mật khẩu không chính xác.';
+        friendlyMessage = language === 'vi' ? 'Email hoặc mật khẩu không chính xác.' : 'Incorrect email or password.';
       } else if (err.code === 'auth/email-already-in-use') {
-        friendlyMessage = 'Email này đã được sử dụng.';
+        friendlyMessage = language === 'vi' ? 'Email này đã được sử dụng.' : 'This email is already in use.';
       } else if (err.code === 'auth/weak-password') {
-        friendlyMessage = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+        friendlyMessage = language === 'vi' ? 'Mật khẩu quá yếu (tối thiểu 6 ký tự).' : 'Weak password (minimum 6 characters).';
       }
       setError(friendlyMessage);
       
@@ -168,10 +170,10 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
             <span className="font-mono font-bold text-white text-2xl tracking-tighter">Hx</span>
           </motion.div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            {isForgotPassword ? 'Khôi phục mật khẩu' : (isLogin ? 'Đăng nhập vào hệ thống' : 'Tạo tài khoản mới')}
+            {isForgotPassword ? (language === 'vi' ? 'Khôi phục mật khẩu' : 'Reset Password') : (isLogin ? t('welcomeBack') : (language === 'vi' ? 'Tạo tài khoản mới' : 'Create New Account'))}
           </h2>
           <p className="text-white/60 text-sm mt-2">
-            {isForgotPassword ? 'Nhập email để nhận liên kết đặt lại mật khẩu.' : 'Hệ thống phân tích & chỉnh sửa dữ liệu nhị phân'}
+            {isForgotPassword ? (language === 'vi' ? 'Nhập email để nhận liên kết đặt lại mật khẩu.' : 'Enter email to receive reset link.') : t('authDesc')}
           </p>
         </div>
 
@@ -193,16 +195,16 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
             <button 
               onClick={() => handleProviderSignIn(googleProvider, 'Google')}
               type="button" 
-              className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium"
+              className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium cursor-pointer"
             >
-              <Chrome className="w-5 h-5 mr-3 text-red-400" /> Tiếp tục với Google
+              <Chrome className="w-5 h-5 mr-3 text-red-400" /> {language === 'vi' ? 'Tiếp tục với Google' : 'Continue with Google'}
             </button>
             <button 
               onClick={() => handleProviderSignIn(githubProvider, 'GitHub')}
               type="button" 
-              className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium"
+              className="w-full flex items-center justify-center px-4 py-3 border border-white/10 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-all text-sm font-medium cursor-pointer"
             >
-              <Github className="w-5 h-5 mr-3" /> Tiếp tục với GitHub
+              <Github className="w-5 h-5 mr-3" /> {language === 'vi' ? 'Tiếp tục với GitHub' : 'Continue with GitHub'}
             </button>
 
             <div className="relative py-4">
@@ -210,7 +212,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
                 <div className="w-full border-t border-white/10"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-transparent text-white/40">hoặc</span>
+                <span className="px-2 bg-[#0d0d12]/90 text-white/40">{language === 'vi' ? 'hoặc' : 'or'}</span>
               </div>
             </div>
           </div>
@@ -218,7 +220,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">Email Address</label>
+            <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">{t('emailAddress')}</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
               <input
@@ -235,10 +237,10 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
           {!isForgotPassword && (
             <div>
               <div className="flex justify-between items-center mb-1 ml-1">
-                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider">Password</label>
+                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider">{t('password')}</label>
                 {isLogin && (
-                  <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                    Quên mật khẩu?
+                  <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-purple-400 hover:text-purple-300 transition-colors cursor-pointer">
+                    {t('forgotPassword')}
                   </button>
                 )}
               </div>
@@ -261,9 +263,9 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl mt-4">
               <div className="flex items-center mb-2">
                 <ShieldAlert className="w-4 h-4 text-orange-400 mr-2" />
-                <label className="block text-xs font-semibold text-orange-400 uppercase tracking-wider">Xác minh bảo mật</label>
+                <label className="block text-xs font-semibold text-orange-400 uppercase tracking-wider">{language === 'vi' ? 'Xác minh bảo mật' : 'Security Verification'}</label>
               </div>
-              <p className="text-xs text-white/60 mb-3">Phát hiện hoạt động bất thường. Vui lòng giải phép toán để tiếp tục.</p>
+              <p className="text-xs text-white/60 mb-3">{language === 'vi' ? 'Phát hiện hoạt động bất thường. Vui lòng giải phép toán để tiếp tục.' : 'Unusual activity detected. Please solve the math problem to continue.'}</p>
               <div className="flex items-center space-x-3">
                 <div className="text-sm font-bold bg-black/30 px-3 py-2 border border-white/10 rounded-lg whitespace-nowrap text-white">
                   {captchaQuestion.a} + {captchaQuestion.b} =
@@ -283,16 +285,16 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center px-4 py-3 mt-6 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500 disabled:opacity-50 transition-all group"
+            className="w-full flex items-center justify-center px-4 py-3 mt-6 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-purple-500 disabled:opacity-50 transition-all group cursor-pointer"
           >
             {loading ? (
               <span className="flex items-center">
                 <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Đang xử lý...
+                {language === 'vi' ? 'Đang xử lý...' : 'Processing...'}
               </span>
             ) : (
               <>
-                {isForgotPassword ? 'Gửi liên kết khôi phục' : (isLogin ? 'Đăng nhập' : 'Đăng ký')}
+                {isForgotPassword ? (language === 'vi' ? 'Gửi liên kết khôi phục' : 'Send reset link') : (isLogin ? t('loginButton') : t('registerButton'))}
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </>
             )}
@@ -301,17 +303,17 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="mt-6 text-center">
           {isForgotPassword ? (
-            <button onClick={() => setIsForgotPassword(false)} className="text-sm font-medium text-white/60 hover:text-white transition-colors">
-              Quay lại đăng nhập
+            <button onClick={() => setIsForgotPassword(false)} className="text-sm font-medium text-white/60 hover:text-white transition-colors cursor-pointer">
+              {language === 'vi' ? 'Quay lại đăng nhập' : 'Back to login'}
             </button>
           ) : (
             <p className="text-sm text-white/60">
-              {isLogin ? "Chưa có tài khoản?" : "Đã có tài khoản?"}{' '}
+              {isLogin ? t('noAccount') : t('hasAccount')}{' '}
               <button
                 onClick={() => { setIsLogin(!isLogin); setError(''); setRequiresCaptcha(false); }}
-                className="font-medium text-purple-400 hover:text-purple-300 transition-colors"
+                className="font-medium text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
               >
-                {isLogin ? 'Đăng ký ngay' : 'Đăng nhập'}
+                {isLogin ? (language === 'vi' ? 'Đăng ký ngay' : 'Register now') : (language === 'vi' ? 'Đăng nhập' : 'Sign in')}
               </button>
             </p>
           )}

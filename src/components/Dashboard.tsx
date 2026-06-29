@@ -6,9 +6,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { getStats, getRecentFiles } from '../utils/stats';
 import { getFile } from '../utils/db';
 import { useUI } from './UIProvider';
+import { useLanguage } from './LanguageProvider';
 
 // Performance Monitor Component
 function PerfMonitor() {
+  const { language, t } = useLanguage();
   const [cpu, setCpu] = useState(12);
   const [ram, setRam] = useState(128);
 
@@ -24,7 +26,7 @@ function PerfMonitor() {
     <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm">
       <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest flex items-center mb-4">
         <Activity className="w-4 h-4 mr-2 text-emerald-500/70" />
-        Hệ thống
+        {language === 'vi' ? 'Hiệu năng hệ thống' : 'System Engine Metrics'}
       </h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -45,6 +47,7 @@ function PerfMonitor() {
 
 export default function Dashboard({ user, profile, onLogout, onViewProfile, onOpenFile, onOpenCloudFile }: { user: User, profile: UserProfile | null, onLogout: () => void, onViewProfile: () => void, onOpenFile: () => void, onOpenCloudFile?: (file: File) => void }) {
   const { toast } = useUI();
+  const { language, t } = useLanguage();
   const [stats, setStats] = useState<UserStats>({ filesUploaded: 0, hexEdits: 0, bitEdits: 0, hashesGenerated: 0, digitalSignatures: 0, storageUsed: 0 });
   const [recentFiles, setRecentFiles] = useState<FileMeta[]>([]);
   
@@ -73,16 +76,16 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
 
   const handleOpenRecentFile = async (fileMeta: FileMeta) => {
     try {
-      toast(`Đang tải tệp: ${fileMeta.name}...`, 'info');
+      toast(language === 'vi' ? `Đang tải tệp: ${fileMeta.name}...` : `Loading file: ${fileMeta.name}...`, 'info');
       const file = await getFile(fileMeta.id);
       if (file && onOpenCloudFile) {
         onOpenCloudFile(file);
       } else {
-        toast(`Không tìm thấy tệp tin: ${fileMeta.name}.`, 'error');
+        toast(language === 'vi' ? `Không tìm thấy tệp tin: ${fileMeta.name}.` : `File not found: ${fileMeta.name}.`, 'error');
       }
     } catch (error) {
       console.error("Error:", error);
-      toast("Lỗi khi mở tệp!", 'error');
+      toast(language === 'vi' ? "Lỗi khi mở tệp!" : "Failed to open file!", 'error');
     }
   };
 
@@ -91,12 +94,12 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white">File Analysis Platform</h1>
-          <p className="text-white/40 mt-1 text-sm">Phân tích sâu, chỉnh sửa thông minh.</p>
+          <h1 className="text-2xl font-bold text-white">{language === 'vi' ? 'Nền tảng phân tích tệp tin' : 'File Analysis Platform'}</h1>
+          <p className="text-white/40 mt-1 text-sm">{language === 'vi' ? 'Phân tích sâu, chỉnh sửa thông minh.' : 'Deep analysis, smart binary editing.'}</p>
         </div>
-        <button onClick={onOpenFile} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold text-sm shadow-lg shadow-purple-600/10 transition-all flex items-center">
+        <button onClick={onOpenFile} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl font-semibold text-sm shadow-lg shadow-purple-600/10 transition-all flex items-center cursor-pointer">
           <Edit3 className="w-4 h-4 mr-2" />
-          Mở tệp
+          {t('openFile')}
         </button>
       </div>
 
@@ -105,26 +108,26 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
         {/* Left Column: Stats */}
         <div className="lg:col-span-3 space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <StatCard icon={<FileText />} title="Files" value={stats.filesUploaded} color="blue" />
-            <StatCard icon={<Edit3 />} title="Edits" value={stats.hexEdits + stats.bitEdits} color="purple" />
-            <StatCard icon={<HardDrive />} title="Storage" value="2.4 GB" color="cyan" />
+            <StatCard icon={<FileText />} title={language === 'vi' ? 'Tệp Đã Tải' : 'Files Uploaded'} value={stats.filesUploaded} color="blue" />
+            <StatCard icon={<Edit3 />} title={language === 'vi' ? 'Số Bản Vá' : 'Active Patches'} value={stats.hexEdits + stats.bitEdits} color="purple" />
+            <StatCard icon={<HardDrive />} title={language === 'vi' ? 'Hạn Mức' : 'Storage limit'} value="2.5 GB" color="cyan" />
           </div>
 
           <div className="bg-[#0b0f19] border border-white/5 rounded-2xl p-6 shadow-sm flex flex-col h-full min-h-[300px]">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Tệp tin gần đây</h3>
+              <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">{language === 'vi' ? 'Tệp tin gần đây' : 'Recent files'}</h3>
               {recentFiles.length > 0 && (
                 <button 
                   onClick={() => {
-                    if (window.confirm("Xác nhận xóa toàn bộ lịch sử?")) {
+                    if (window.confirm(language === 'vi' ? "Xác nhận xóa toàn bộ lịch sử?" : "Are you sure you want to clear your file history?")) {
                       localStorage.removeItem(`webhex_files_${user.uid}`);
                       setRecentFiles([]);
-                      toast("Đã xóa lịch sử tệp tin", "success");
+                      toast(language === 'vi' ? "Đã xóa lịch sử tệp tin" : "Cleared file history successfully", "success");
                     }
                   }}
-                  className="text-[10px] uppercase font-bold text-red-400/70 hover:text-red-400 transition-colors"
+                  className="text-[10px] uppercase font-bold text-red-400/70 hover:text-red-400 transition-colors cursor-pointer"
                 >
-                  Xóa lịch sử
+                  {language === 'vi' ? 'Xóa lịch sử' : 'Clear history'}
                 </button>
               )}
             </div>
@@ -133,8 +136,8 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
               {recentFiles.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-white/20">
                   <HardDrive className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm font-medium">Chưa có tệp tin nào</p>
-                  <p className="text-xs opacity-60">Mở tệp để bắt đầu lưu lịch sử</p>
+                  <p className="text-sm font-medium">{language === 'vi' ? 'Chưa có tệp tin nào' : 'No files analyzed yet'}</p>
+                  <p className="text-xs opacity-60">{language === 'vi' ? 'Mở tệp để bắt đầu lưu lịch sử' : 'Open a file to start tracking analysis history'}</p>
                 </div>
               ) : (
                 recentFiles.map(file => (
@@ -143,7 +146,7 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
                       <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
                         <FileText className="w-5 h-5 text-blue-400/70" />
                       </div>
-                      <div>
+                      <div className="text-left">
                         <p className="text-sm font-medium">{file.name}</p>
                         <div className="flex items-center space-x-2 text-[10px] text-white/30">
                           <span>{new Date(file.uploadedAt).toLocaleString()}</span>
@@ -180,7 +183,7 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
                 onClick={onViewProfile}
                 className="px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
               >
-                Hồ sơ
+                {language === 'vi' ? 'Hồ sơ' : 'Profile'}
               </button>
             </div>
             <button 
@@ -188,17 +191,17 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
               className="w-full py-2.5 bg-red-600/10 hover:bg-red-600/25 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 mr-2" />
-              Đăng xuất
+              {language === 'vi' ? 'Đăng xuất' : 'Sign out'}
             </button>
           </div>
 
-          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm space-y-4">
-            <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Tiện ích nhanh</h3>
+          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm space-y-4 text-left">
+            <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">{language === 'vi' ? 'Tiện ích nhanh' : 'Quick utilities'}</h3>
             <div className="grid grid-cols-2 gap-2">
-              <QuickAction icon={<Zap />} label="Scan" onClick={() => toast("Tính năng đang được tối ưu hóa", "info")} />
-              <QuickAction icon={<ShieldAlert />} label="Compare" onClick={() => toast("Chưa có tệp để so sánh", "info")} />
-              <QuickAction icon={<Layers />} label="Modules" onClick={() => toast("Quản lý module", "info")} />
-              <QuickAction icon={<Cpu />} label="Stats" onClick={() => toast("Báo cáo hệ thống", "info")} />
+              <QuickAction icon={<Zap />} label="Scan" onClick={() => toast(language === 'vi' ? "Tính năng đang được tối ưu hóa" : "Optimization in progress", "info")} />
+              <QuickAction icon={<ShieldAlert />} label="Compare" onClick={() => toast(language === 'vi' ? "Chưa có tệp để so sánh" : "No files loaded to compare", "info")} />
+              <QuickAction icon={<Layers />} label="Modules" onClick={() => toast(language === 'vi' ? "Quản lý module" : "Module management", "info")} />
+              <QuickAction icon={<Cpu />} label="Stats" onClick={() => toast(language === 'vi' ? "Báo cáo hệ thống" : "System diagnostics", "info")} />
             </div>
           </div>
         </div>
