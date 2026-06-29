@@ -1,33 +1,35 @@
 import React, { useState } from 'react';
-import { Edit3, AlertTriangle } from 'lucide-react';
+import { Edit3, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface BulkEditorProps {
-  data: Uint8Array | null;
-  onDataChange: (newData: Uint8Array) => void;
+  patches: Map<number, number>;
+  setPatches: React.Dispatch<React.SetStateAction<Map<number, number>>>;
+  fileSize: number;
+  onApplied: () => void;
 }
 
-export default function BulkEditor({ data, onDataChange }: BulkEditorProps) {
+export default function BulkEditor({ patches, setPatches, fileSize, onApplied }: BulkEditorProps) {
   const [startOffset, setStartOffset] = useState('');
   const [length, setLength] = useState('');
   const [hexValue, setHexValue] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
 
-  const handleApply = () => {
+  const handleApply = async () => {
     setError('');
     setSuccess('');
     
-    if (!data) return;
-
+    // Convert startOffset (hex) to decimal
     const start = parseInt(startOffset, 16);
     const len = parseInt(length, 10);
     
-    if (isNaN(start) || start < 0 || start >= data.length) {
-      setError('Offset bắt đầu không hợp lệ (phải là Hex).');
+    if (isNaN(start) || start < 0 || start >= fileSize) {
+      setError('Offset bắt đầu không hợp lệ (phải là Hex, VD: 1A0 hoặc F000).');
       return;
     }
     
-    if (isNaN(len) || len <= 0 || start + len > data.length) {
+    if (isNaN(len) || len <= 0 || start + len > fileSize) {
       setError('Độ dài không hợp lệ hoặc vượt quá kích thước file.');
       return;
     }
@@ -39,36 +41,49 @@ export default function BulkEditor({ data, onDataChange }: BulkEditorProps) {
       return;
     }
 
-    const valueBytes = [];
+    const patternBytes: number[] = [];
     for (let i = 0; i < cleanHex.length; i += 2) {
-      valueBytes.push(parseInt(cleanHex.substring(i, i + 2), 16));
+      patternBytes.push(parseInt(cleanHex.substring(i, i + 2), 16));
     }
 
-    const newData = new Uint8Array(data);
-    let valIdx = 0;
-    
-    for (let i = start; i < start + len; i++) {
-      newData[i] = valueBytes[valIdx];
-      valIdx = (valIdx + 1) % valueBytes.length;
-    }
+    setIsApplying(true);
 
-    onDataChange(newData);
-    setSuccess(`Đã thay đổi thành công ${len} byte từ offset 0x${start.toString(16).toUpperCase()}.`);
-    
-    // Auto clear success after 3s
-    setTimeout(() => setSuccess(''), 3000);
+    try {
+      // Direct offline patching loop
+      const newPatches = new Map(patches);
+      for (let i = 0; i < len; i++) {
+        const offset = start + i;
+        const byteValue = patternBytes[i % patternBytes.length];
+        newPatches.set(offset, byteValue);
+      }
+      setPatches(newPatches);
+
+      setSuccess(`Đã áp dụng thay đổi thành công ${len} byte từ offset 0x${start.toString(16).toUpperCase()}.`);
+      
+      // Notify parent to refresh views
+      setTimeout(() => {
+        onApplied();
+      }, 50);
+      
+      // Auto clear success after 5s
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      setError(err.message || 'Lỗi xử lý cục bộ.');
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   return (
     <div className="bg-transparent border-0 h-full flex flex-col">
       <div className="p-3 bg-white/5 border-b border-white/5 flex items-center rounded-t-2xl">
         <Edit3 className="w-4 h-4 mr-2 text-purple-400" />
-        <h3 className="text-sm font-semibold text-white">Sửa hàng loạt (Bulk Edit)</h3>
+        <h3 className="text-sm font-semibold text-white">Chỉnh sửa hàng loạt (Bulk Editor)</h3>
       </div>
       
       <div className="p-4 space-y-4 flex-1">
-        <p className="text-xs text-white/50 bg-white/5 p-3 rounded-lg border border-white/5">
-          Chức năng này cho phép bạn ghi đè một đoạn dữ liệu bằng một hoặc nhiều giá trị Hex lặp lại.
+        <p className="text-xs text-white/50 bg-white/5 p-3 rounded-lg border border-white/5 leading-relaxed">
+          Chức năng này ghi đè một đoạn dữ liệu bằng một hoặc nhiều giá trị Hex lặp lại trực tiếp trong bộ nhớ Patch của Client. Hỗ trợ an toàn với file có dung lượng cực lớn.
         </p>
 
         {error && (
@@ -94,6 +109,7 @@ export default function BulkEditor({ data, onDataChange }: BulkEditorProps) {
                 value={startOffset}
                 onChange={(e) => setStartOffset(e.target.value)}
                 placeholder="00001A"
+                disabled={isApplying}
                 className="w-full pl-8 pr-3 py-2.5 text-sm bg-black/20 border border-white/10 rounded-xl focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none font-mono uppercase text-white transition-colors"
               />
             </div>
@@ -106,6 +122,7 @@ export default function BulkEditor({ data, onDataChange }: BulkEditorProps) {
               value={length}
               onChange={(e) => setLength(e.target.value)}
               placeholder="1024"
+              disabled={isApplying}
               className="w-full px-4 py-2.5 text-sm bg-black/20 border border-white/10 rounded-xl focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none font-mono text-white transition-colors"
             />
           </div>
@@ -117,15 +134,24 @@ export default function BulkEditor({ data, onDataChange }: BulkEditorProps) {
               value={hexValue}
               onChange={(e) => setHexValue(e.target.value)}
               placeholder="FF 00"
+              disabled={isApplying}
               className="w-full px-4 py-2.5 text-sm bg-black/20 border border-white/10 rounded-xl focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none font-mono uppercase text-white transition-colors"
             />
           </div>
 
           <button
             onClick={handleApply}
-            className="w-full py-2.5 mt-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-purple-500/20"
+            disabled={isApplying}
+            className="w-full py-2.5 mt-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 flex items-center justify-center space-x-2"
           >
-            Áp dụng thay đổi
+            {isApplying ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Đang ghi đè cục bộ...</span>
+              </>
+            ) : (
+              <span>Áp dụng thay đổi</span>
+            )}
           </button>
         </div>
       </div>

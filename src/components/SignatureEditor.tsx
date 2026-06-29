@@ -4,11 +4,20 @@ import { auth } from '../firebase';
 import { incrementStat } from '../utils/stats';
 
 interface SignatureEditorProps {
-  data: Uint8Array | null;
-  onDataChange: (newData: Uint8Array) => void;
+  patches: Map<number, number>;
+  setPatches: React.Dispatch<React.SetStateAction<Map<number, number>>>;
+  virtualFileSize: number;
+  setVirtualFileSize: React.Dispatch<React.SetStateAction<number>>;
+  onApplied: () => void;
 }
 
-export default function SignatureEditor({ data, onDataChange }: SignatureEditorProps) {
+export default function SignatureEditor({ 
+  patches, 
+  setPatches, 
+  virtualFileSize, 
+  setVirtualFileSize, 
+  onApplied 
+}: SignatureEditorProps) {
   const [signature, setSignature] = useState('');
   const [mode, setMode] = useState<'text' | 'hex'>('text');
   const [success, setSuccess] = useState('');
@@ -18,7 +27,6 @@ export default function SignatureEditor({ data, onDataChange }: SignatureEditorP
     setError('');
     setSuccess('');
 
-    if (!data) return;
     if (!signature.trim()) {
       setError('Vui lòng nhập nội dung chữ ký.');
       return;
@@ -41,18 +49,25 @@ export default function SignatureEditor({ data, onDataChange }: SignatureEditorP
       }
     }
 
-    // Append signature to end of file
-    const newData = new Uint8Array(data.length + sigBytes.length);
-    newData.set(data);
-    newData.set(sigBytes, data.length);
+    // Append signature to end of file locally
+    const start = virtualFileSize;
+    const newPatches = new Map(patches);
+    for (let i = 0; i < sigBytes.length; i++) {
+      newPatches.set(start + i, sigBytes[i]);
+    }
 
-    onDataChange(newData);
+    setPatches(newPatches);
+    setVirtualFileSize(start + sigBytes.length);
     setSuccess(`Đã thêm chữ ký thành công (${sigBytes.length} bytes) vào cuối file.`);
     setSignature('');
     
     if (auth.currentUser) {
       incrementStat(auth.currentUser.uid, 'digitalSignatures');
     }
+
+    setTimeout(() => {
+      onApplied();
+    }, 50);
     
     setTimeout(() => setSuccess(''), 4000);
   };
@@ -66,7 +81,7 @@ export default function SignatureEditor({ data, onDataChange }: SignatureEditorP
       
       <div className="p-4 space-y-4 flex-1">
         <p className="text-xs text-white/50 bg-white/5 p-3 rounded-lg border border-white/5">
-          Chức năng này sẽ thêm dữ liệu (chữ ký cá nhân, watermark) vào cuối file hiện tại.
+          Chức năng này sẽ thêm dữ liệu (chữ ký cá nhân, watermark) vào cuối file hiện tại hoàn toàn offline.
         </p>
 
         {error && (

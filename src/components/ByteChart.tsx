@@ -1,54 +1,92 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { readAndPatchChunk } from '../utils/fileStream';
 
 interface ByteChartProps {
   file: File;
-  editedData: Uint8Array | null;
+  patches: Map<number, number>;
+  virtualFileSize: number;
 }
 
-export default function ByteChart({ file, editedData }: ByteChartProps) {
-  const [originalData, setOriginalData] = React.useState<Uint8Array | null>(null);
+export default function ByteChart({ file, patches, virtualFileSize }: ByteChartProps) {
+  const [counts, setCounts] = useState<number[]>(new Array(256).fill(0));
+  const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  React.useEffect(() => {
-    // Slice up to 5MB to prevent memory crash for large files
-    const slice = file.slice(0, 5 * 1024 * 1024);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setOriginalData(new Uint8Array(e.target.result as ArrayBuffer));
+  useEffect(() => {
+    let active = true;
+    const calculateFrequency = async () => {
+      setAnalyzing(true);
+      setProgress(0);
+      const freq = new Array(256).fill(0);
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
+      const totalSize = virtualFileSize;
+      let offset = 0;
+
+      // If file is extremely large (e.g. > 50MB), sample 100 blocks of 1MB spaced evenly
+      // to keep it fast, statistically accurate, and non-freezing.
+      if (totalSize <= 50 * 1024 * 1024) {
+        while (offset < totalSize && active) {
+          const size = Math.min(CHUNK_SIZE, totalSize - offset);
+          const chunk = await readAndPatchChunk(file, offset, size, patches, totalSize);
+          for (let i = 0; i < chunk.length; i++) {
+            freq[chunk[i]]++;
+          }
+          offset += size;
+          setProgress(Math.min(100, Math.floor((offset / totalSize) * 100)));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      } else {
+        const numBlocks = 100;
+        const blockSize = 1024 * 1024; // 1MB blocks
+        const stride = Math.floor((totalSize - blockSize) / numBlocks);
+        for (let b = 0; b < numBlocks && active; b++) {
+          const blockOffset = b * stride;
+          const size = Math.min(blockSize, totalSize - blockOffset);
+          const chunk = await readAndPatchChunk(file, blockOffset, size, patches, totalSize);
+          for (let i = 0; i < chunk.length; i++) {
+            freq[chunk[i]]++;
+          }
+          setProgress(Math.min(100, Math.floor(((b + 1) / numBlocks) * 100)));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+
+      if (active) {
+        setCounts(freq);
+        setAnalyzing(false);
       }
     };
-    reader.readAsArrayBuffer(slice);
-  }, [file]);
 
-  const activeData = editedData || originalData;
+    calculateFrequency();
+    return () => {
+      active = false;
+    };
+  }, [file, patches, virtualFileSize]);
 
   const chartData = useMemo(() => {
-    if (!activeData) return [];
-    
-    // Calculate frequency, taking a sample if file is too large to prevent freezing
-    const counts = new Array(256).fill(0);
-    const step = Math.max(1, Math.floor(activeData.length / 100000)); // sample max 100k bytes
-    
-    for (let i = 0; i < activeData.length; i += step) {
-      counts[activeData[i]]++;
-    }
-
     return counts.map((count, index) => ({
       byte: index.toString(16).padStart(2, '0').toUpperCase(),
       count
     }));
-  }, [activeData]);
-
-  if (!activeData) {
-    return <div className="p-4 text-center text-white/50 text-sm">Đang phân tích byte...</div>;
-  }
+  }, [counts]);
 
   return (
     <div className="h-64 w-full p-4 bg-transparent border-0 flex flex-col">
       <h3 className="text-sm font-semibold text-white mb-4 flex justify-between items-center">
-        <span className="flex items-center"><span className="w-2 h-2 rounded-full bg-purple-500 mr-2"></span>Biểu đồ phân bố Byte (Mẫu)</span>
-        {editedData && <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-normal border border-purple-500/30">Đã cập nhật</span>}
+        <span className="flex items-center">
+          <span className="w-2 h-2 rounded-full bg-purple-500 mr-2"></span>
+          Biểu đồ phân bố Byte {virtualFileSize > 50 * 1024 * 1024 ? '(Mẫu phân tích)' : '(Toàn bộ file)'}
+        </span>
+        {analyzing ? (
+          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-normal border border-purple-500/30 animate-pulse">
+            Đang phân tích ({progress}%)
+          </span>
+        ) : (
+          <span className="text-[10px] bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full font-normal border border-green-500/30">
+            Sẵn sàng
+          </span>
+        )}
       </h3>
       <div className="flex-1 min-h-0 bg-white/5 rounded-xl p-2 border border-white/5">
         <ResponsiveContainer width="100%" height="100%">

@@ -6,6 +6,7 @@ import { FileUp, LogOut, ShieldAlert, Monitor, Home, Loader2 } from 'lucide-reac
 import Auth from './components/Auth';
 import Workspace from './components/Workspace';
 import Dashboard from './components/Dashboard';
+import PremiumBackground from './components/PremiumBackground';
 import { UserProfile, UserSession } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { addRecentFile } from './utils/stats';
@@ -83,66 +84,9 @@ export default function App() {
   };
 
   const handleUploadAndOpen = async (file: File) => {
-    setUploading(true);
-    try {
-      const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB Chunks
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-
-      // Step 1: Initialize session on server
-      const initRes = await fetch('/api/file/upload/init', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          filename: file.name,
-          filesize: file.size
-        })
-      });
-
-      if (!initRes.ok) {
-        throw new Error('Failed to initialize chunked session');
-      }
-
-      const { fileId } = await initRes.json();
-
-      // Step 2: Upload chunks sequentially
-      let finalData = null;
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const start = chunkIndex * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunkBlob = file.slice(start, end);
-
-        const chunkRes = await fetch(`/api/file/upload/chunk?fileId=${fileId}&chunkIndex=${chunkIndex}&totalChunks=${totalChunks}&filename=${encodeURIComponent(file.name)}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/octet-stream'
-          },
-          body: chunkBlob
-        });
-
-        if (!chunkRes.ok) {
-          throw new Error(`Failed to transmit chunk ${chunkIndex + 1}/${totalChunks}`);
-        }
-
-        if (chunkIndex === totalChunks - 1) {
-          finalData = await chunkRes.json();
-        }
-      }
-
-      if (!finalData || !finalData.fileId) {
-        throw new Error('Upload finalized but metadata was invalid');
-      }
-
-      setFileId(finalData.fileId);
-      setSelectedFile(file);
-      setView('workspace');
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Không thể tải tệp tin lên máy chủ! Đã xảy ra lỗi khi phân đoạn.");
-    } finally {
-      setUploading(false);
-    }
+    setSelectedFile(file);
+    setFileId('local_stream');
+    setView('workspace');
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,28 +151,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col relative overflow-hidden">
-      {/* Background decorations for all views */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-            rotate: [0, 90, 0]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-600/20 blur-[120px]"
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.3, 1],
-            opacity: [0.2, 0.4, 0.2],
-            rotate: [0, -90, 0]
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/20 blur-[120px]"
-        />
-      </div>
+    <div className="min-h-screen bg-[#09090B] text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col relative overflow-hidden">
+      {/* Premium animated background */}
+      <PremiumBackground />
 
       {!user ? (
         <div className="flex-1 flex items-center justify-center p-4 z-10">
