@@ -300,18 +300,24 @@ export default function OverviewTab({
             </div>
           )}
 
-          {/* Quick Stats */}
-          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm">
-            <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-4">Tổng quan</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] text-white/30 uppercase">Chuỗi ký tự</p>
-                <p className="text-lg font-mono font-bold text-white/90">{analysis?.strings.length || 0}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-white/30 uppercase">Thay đổi (Patches)</p>
-                <p className="text-lg font-mono font-bold text-white/90">{patches.size}</p>
-              </div>
+          {/* Deep Scan CTA */}
+          <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-white/10 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest flex items-center">
+                <Sparkles className="w-3 h-3 mr-2" /> Deep Analysis
+              </h3>
+              <ShieldCheck className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-white/70 leading-relaxed">
+                Kích hoạt chế độ <b>Deep Scan</b> để quét toàn bộ strings, magic patterns và entropy trên toàn bộ file (hỗ trợ tới vài GB).
+              </p>
+              <button 
+                onClick={() => onChangePerfMode('professional')}
+                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-900/20 flex items-center justify-center"
+              >
+                Kích hoạt Full Analysis
+              </button>
             </div>
           </div>
         </div>

@@ -182,7 +182,7 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
       setIsAnalyzing(true);
       setShowAnalysisSummary(false); // Do not block UI
       setAnalysisProgress(0);
-      setAnalysisStatus('Initializing...');
+      setAnalysisStatus('Đang khởi tạo phân tích (Initializing)...');
       setScanMetrics({
         chunk: 0,
         totalChunks: 0,
@@ -201,7 +201,11 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
           setAnalysisCache(prev => ({ ...prev, [fileCacheKey]: result }));
           setIsAnalyzing(false);
           setAnalysisProgress(100);
-          setAnalysisStatus('Done');
+          setAnalysisStatus('Hoàn tất (Done)');
+          
+          if (result.fileType === 'Unknown') {
+            toast("Định dạng chưa rõ, khuyến nghị dùng Hex/Strings mode", "info");
+          }
         },
         (error) => {
           console.error("Analysis failed:", error);
@@ -221,7 +225,19 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
     return () => {
       abortController.abort();
     };
-  }, [activeFileId, activeFile, perfMode]);
+  }, [activeFileId, activeFile, perfMode, analysisCache]);
+
+  const handleTriggerDeepScan = () => {
+    // Force re-analysis with professional mode
+    setPerfMode('professional');
+    const fileCacheKey = `${activeFile.name}_${activeFile.size}_${activeFile.lastModified}`;
+    setAnalysisCache(prev => {
+      const next = { ...prev };
+      delete next[fileCacheKey];
+      return next;
+    });
+    toast("Đang chuyển sang chế độ phân tích sâu...", "info");
+  };
 
   // Sync back new files if parent prop changes
   useEffect(() => {
@@ -694,6 +710,7 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         setActiveTab('advanced');
                       }}
                       onPatchString={handlePatchString}
+                      analysis={analysisResult}
                     />
                   </div>
                 )}

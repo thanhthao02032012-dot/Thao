@@ -54,19 +54,16 @@ self.onmessage = async (e: MessageEvent) => {
     
     self.postMessage({ 
       type: 'PROGRESS', 
-      progress: 10, 
-      status: 'Detecting format...', 
+      progress: 5, 
+      status: 'Đang nhận diện định dạng (Detecting format)...', 
       chunk: 0, 
       totalChunks 
     });
 
-    // We can't easily call runSmartParser here if it depends on complex imports
-    // So we'll pass back the header bytes for the main thread to do the first "Smart" pass
-    // OR we just focus the worker on the "Full Scan" parts like strings.
-
     // 2. Full Strings Scan (Safe Streaming)
     let currentOffset = 0;
     let chunkCount = 0;
+    let totalStringsFound = 0;
     
     while (currentOffset < size) {
       const end = Math.min(currentOffset + chunkSize, size);
@@ -75,7 +72,16 @@ self.onmessage = async (e: MessageEvent) => {
       const bytes = new Uint8Array(arrayBuffer);
       
       chunkCount++;
-      extractStringsFromBytes(bytes, currentOffset, stringsList);
+      const foundInChunk: StringEntry[] = [];
+      extractStringsFromBytes(bytes, currentOffset, foundInChunk);
+      
+      totalStringsFound += foundInChunk.length;
+      
+      // Memory Optimization: Only keep a limited set in worker memory for final result
+      // but stream everything to main thread if needed.
+      if (stringsList.length < 100000) {
+        stringsList.push(...foundInChunk);
+      }
       
       currentOffset = end;
       
@@ -83,41 +89,29 @@ self.onmessage = async (e: MessageEvent) => {
       const elapsed = (now - startTime) / 1000;
       const speed = (currentOffset / (1024 * 1024)) / elapsed;
       
-      // Update progress every 100ms or every 5 chunks
-      if (now - lastProgressUpdate > 100 || chunkCount % 5 === 0) {
+      // Update progress every 150ms or every 10 chunks
+      if (now - lastProgressUpdate > 150 || chunkCount % 10 === 0) {
         self.postMessage({
           type: 'PROGRESS',
           progress: Math.min(99, (currentOffset / size) * 100),
-          status: `Scanning strings... (${speed.toFixed(1)} MB/s)`,
+          status: `Đang quét chuỗi (Scanning)... ${totalStringsFound.toLocaleString()} strings found`,
           chunk: chunkCount,
           totalChunks,
           speed
         });
         
-        // Send partial results for long scans
-        if (chunkCount % 20 === 0) {
-          self.postMessage({
-            type: 'PARTIAL',
-            strings: stringsList.slice(-1000) // Just send the latest found for now
-          });
-        }
-        
         lastProgressUpdate = now;
       }
 
-      // Memory safety: If strings list is getting TOO big, we might want to cap it 
-      // or implement a strategy to only keep "interesting" ones.
-      // For now, let's keep them but be aware.
-      if (stringsList.length > 500000) {
-        // Break early if we hit a massive limit to prevent OOM
-        break; 
-      }
+      // Safety break for massive files in non-pro mode
+      if (perfMode === 'balanced' && totalStringsFound > 200000) break;
     }
 
     self.postMessage({
       type: 'DONE',
       strings: stringsList,
-      headerBytes
+      headerBytes,
+      totalFound: totalStringsFound
     });
 
   } catch (err: any) {

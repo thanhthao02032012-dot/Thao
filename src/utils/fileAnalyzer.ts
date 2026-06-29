@@ -251,7 +251,7 @@ export async function performDeepAnalysis(
       text: isText,
       strings: list.length > 0,
       metadata: true,
-      dates: list.some(s => s.text.includes('/')),
+      dates: list.some(s => s.value.includes('/')),
       urls: list.some(s => s.type === 'url'),
       versions: true,
       header: true,
