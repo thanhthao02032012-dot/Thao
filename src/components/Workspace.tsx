@@ -650,7 +650,12 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
               }>
                 {/* 2. Main Lazy Tab Router (Mounted tabs are cached in DOM for instant switching) */}
                 {mountedTabs.has('overview') && (
-                  <div className={activeTab === 'overview' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'overview' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'overview' ? 'block' : 'hidden'}
+                  >
                     <OverviewTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
@@ -677,11 +682,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       appMode={appMode}
                       setAppMode={setAppMode}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('content') && (
-                  <div className={activeTab === 'content' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'content' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'content' ? 'block' : 'hidden'}
+                  >
                     <ContentTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
@@ -689,11 +699,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       initialTextContent={analysisResult?.textContent || ''}
                       onSaveContent={handleSaveTextContent}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('media') && (
-                  <div className={activeTab === 'media' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'media' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'media' ? 'block' : 'hidden'}
+                  >
                     <div className="bg-[#121829]/40 border border-white/5 rounded-3xl p-5 md:p-6 shadow-2xl">
                       <h3 className="text-sm font-bold text-white mb-5 flex items-center">
                         <Image className="w-4 h-4 text-purple-400 mr-2" />
@@ -701,11 +716,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       </h3>
                       <MediaPreview file={activeFile} patches={activePatches} virtualFileSize={activeFileSize} />
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('strings') && (
-                  <div className={activeTab === 'strings' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'strings' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'strings' ? 'block' : 'hidden'}
+                  >
                     <StringsTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
@@ -717,22 +737,32 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       onPatchString={handlePatchString}
                       analysis={analysisResult}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('metadata') && (
-                  <div className={activeTab === 'metadata' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'metadata' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'metadata' ? 'block' : 'hidden'}
+                  >
                     <MetadataTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
                       analysis={analysisResult}
                       onUpdateMetadataString={handlePatchString}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('structure') && (
-                  <div className={activeTab === 'structure' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'structure' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'structure' ? 'block' : 'hidden'}
+                  >
                     <StructureTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
@@ -743,11 +773,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         setActiveTab('advanced');
                       }}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('search') && (
-                  <div className={activeTab === 'search' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'search' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'search' ? 'block' : 'hidden'}
+                  >
                     <SearchTab
                       file={activeFile}
                       patches={activePatches}
@@ -758,11 +793,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         setActiveTab('advanced');
                       }}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('edit') && (
-                  <div className={activeTab === 'edit' ? 'block' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'edit' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'edit' ? 'block' : 'hidden'}
+                  >
                     <SmartEditTab
                       file={activeFile}
                       virtualFileSize={activeFileSize}
@@ -777,11 +817,16 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         setIsAdvancedUnlocked(true);
                       }}
                     />
-                  </div>
+                  </motion.div>
                 )}
 
                 {mountedTabs.has('advanced') && (
-                  <div className={activeTab === 'advanced' ? 'block h-full' : 'hidden'}>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={activeTab === 'advanced' ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    className={activeTab === 'advanced' ? 'block h-full' : 'hidden'}
+                  >
                     <div className="flex-1 h-full min-h-[480px]">
                       {isAdvancedUnlocked ? (
                         <HexEditor
@@ -819,7 +864,7 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         </div>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 )}
               </React.Suspense>
             </div>

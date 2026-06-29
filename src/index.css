@@ -8,6 +8,34 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Super Smooth Responsive Optimizations */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Highlight Selection */
+::selection {
+  background-color: rgba(139, 92, 246, 0.3);
+  color: #f3f4f6;
+}
+
+/* GPU Accelerated Smooth Transitions */
+.will-change-transform-opacity {
+  will-change: transform, opacity;
+}
+
+/* Premium micro-interactive scales */
+.interactive-tap {
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+}
+.interactive-tap:active {
+  transform: scale(0.97);
+}
+
 @keyframes blob {
   0% {
     transform: translate(0px, 0px) scale(1);

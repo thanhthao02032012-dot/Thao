@@ -14,6 +14,7 @@ import { storeFile } from './utils/db';
 import { useUI } from './components/UIProvider';
 
 import LogoutConfirmModal from './components/LogoutConfirmModal';
+import UserProfileView from './components/UserProfile';
 
 export default function App() {
   const { toast } = useUI();
@@ -24,7 +25,7 @@ export default function App() {
   const [fileId, setFileId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [banned, setBanned] = useState(false);
-  const [view, setView] = useState<'auth' | 'dashboard' | 'workspace'>('auth');
+  const [view, setView] = useState<'auth' | 'dashboard' | 'workspace' | 'profile'>('auth');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
@@ -92,6 +93,10 @@ export default function App() {
     setBanned(false);
     setView('auth');
     setIsLogoutModalOpen(false);
+  };
+
+  const handleUpdateProfile = (updated: UserProfile) => {
+    setUserProfile(updated);
   };
 
   const handleUploadAndOpen = async (file: File) => {
@@ -187,17 +192,23 @@ export default function App() {
             </div>
             
             <div className="flex items-center space-x-2 sm:space-x-4">
-              {view === 'workspace' && (
+              {(view === 'workspace' || view === 'profile') && (
                 <button
-                  onClick={handleCloseWorkspace}
-                  className="flex items-center px-2 sm:px-3 py-1.5 text-sm font-medium text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                  onClick={() => {
+                    if (view === 'workspace') {
+                      handleCloseWorkspace();
+                    } else {
+                      setView('dashboard');
+                    }
+                  }}
+                  className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
                 >
                   <Home className="w-4 h-4 sm:mr-2" />
                   <span className="hidden sm:inline">Về Dashboard</span>
                 </button>
               )}
               {view === 'dashboard' && (
-                <label className="flex items-center px-2 sm:px-4 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-md transition-colors text-sm font-medium cursor-pointer border border-blue-500/30">
+                <label className="flex items-center px-2 sm:px-4 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-md transition-colors text-xs sm:text-sm font-semibold cursor-pointer border border-blue-500/30">
                   <FileUp className="w-4 h-4 sm:mr-2" />
                   <span className="hidden sm:inline">Mở File</span>
                   <input type="file" className="hidden" onChange={handleFileChange} />
@@ -206,20 +217,23 @@ export default function App() {
               
               <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
               
-              <span className="text-sm text-white/50 hidden sm:block truncate max-w-[150px]">
+              <button
+                onClick={() => setView('profile')}
+                className={`text-xs sm:text-sm hover:text-purple-300 font-semibold transition-colors truncate max-w-[80px] sm:max-w-[150px] cursor-pointer ${view === 'profile' ? 'text-purple-400' : 'text-white/70'}`}
+                title="Xem hồ sơ cá nhân"
+              >
                 {userProfile?.displayName || user.email}
-              </span>
+              </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center px-2 py-1.5 text-sm font-medium text-red-400 hover:bg-red-500/20 rounded-md transition-colors"
+                className="flex items-center px-2 py-1.5 text-xs sm:text-sm font-semibold text-red-400 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
           </nav>
 
-          {/* Main Content Area */}
-          <div className="flex-1 flex overflow-hidden z-10 relative">
+            <div className="flex-1 flex overflow-hidden z-10 relative">
             <AnimatePresence mode="wait">
               {view === 'dashboard' && (
                 <motion.div 
@@ -234,6 +248,7 @@ export default function App() {
                     user={user} 
                     profile={userProfile} 
                     onLogout={handleLogout}
+                    onViewProfile={() => setView('profile')}
                     onOpenFile={() => {
                       const input = document.createElement('input');
                       input.type = 'file';
@@ -243,6 +258,24 @@ export default function App() {
                     onOpenCloudFile={async (file) => {
                       await handleUploadAndOpen(file);
                     }}
+                  />
+                </motion.div>
+              )}
+              
+              {view === 'profile' && (
+                <motion.div 
+                  key="profile"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
+                >
+                  <UserProfileView 
+                    user={user} 
+                    profile={userProfile} 
+                    onUpdateProfile={handleUpdateProfile} 
+                    onBack={() => setView('dashboard')} 
                   />
                 </motion.div>
               )}

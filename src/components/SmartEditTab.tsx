@@ -260,31 +260,41 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
     const uploadedFile = e.target.files?.[0];
     if (!uploadedFile) return;
 
-    // Simulate smart patching
-    toast(`Đang phân tích cấu trúc thay thế cho ${item.name}...`, 'info');
-    setTimeout(() => {
-      // Simulate random offset patches
-      for (let i = 0; i < Math.min(uploadedFile.size, 50); i++) {
-        onApplyPatch(item.offset + i, Math.floor(Math.random() * 256));
+    toast(`Đang đọc dữ liệu thay thế cho ${item.name}...`, 'info');
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const arrayBuffer = reader.result as ArrayBuffer;
+        const bytes = new Uint8Array(arrayBuffer);
+        for (let i = 0; i < bytes.length; i++) {
+          onApplyPatch(item.offset + i, bytes[i]);
+        }
+        toast(`✓ Đã thay thế [${item.name}] bằng tệp mới (${bytes.length} bytes) thành công!`, 'success');
+      } catch (err) {
+        toast('Lỗi khi áp dụng bản vá thay thế!', 'error');
       }
-      toast(`✓ Đã thay thế thông minh [${item.name}] thành công! Engine tự động tính toán byte và checksum.`, 'success');
-    }, 1500);
+    };
+    reader.onerror = () => {
+      toast('Lỗi khi đọc tệp tin thay thế!', 'error');
+    };
+    reader.readAsArrayBuffer(uploadedFile);
   };
 
   const handleTextSave = (text: string) => {
     if (!editingItem) return;
     
-    toast(`Đang lưu thay đổi cho ${editingItem.name}...`, 'info');
-    setTimeout(() => {
-      // Simulate text patching
+    toast(`Đang áp dụng thay đổi văn bản cho ${editingItem.name}...`, 'info');
+    try {
       const encoder = new TextEncoder();
       const bytes = encoder.encode(text);
-      for (let i = 0; i < Math.min(bytes.length, editingItem.size || bytes.length); i++) {
+      for (let i = 0; i < bytes.length; i++) {
         onApplyPatch(editingItem.offset + i, bytes[i]);
       }
-      toast(`✓ Đã lưu thay đổi cho [${editingItem.name}] thành công!`, 'success');
+      toast(`✓ Đã lưu thay đổi cho [${editingItem.name}] thành công! (${bytes.length} bytes)`, 'success');
       setEditingItem(null);
-    }, 800);
+    } catch (err) {
+      toast('Lỗi khi lưu thay đổi văn bản!', 'error');
+    }
   };
 
   const getIcon = (type: string) => {

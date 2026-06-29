@@ -60,10 +60,19 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
       }
       onSuccess();
     } catch (err: any) {
+      console.error(`Firebase Auth error for ${providerName}:`, err);
       if (err.code === 'auth/account-exists-with-different-credential') {
-        setError('Email này đã được đăng ký bằng phương thức khác. Vui lòng đăng nhập bằng phương thức đó.');
+        setError('Email của tài khoản này đã được đăng ký bằng phương thức khác (ví dụ: đăng nhập mật khẩu hoặc nhà cung cấp khác). Vui lòng đăng nhập bằng phương thức ban đầu.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('Trình duyệt đã chặn cửa sổ bật lên (popup). Vui lòng cấp quyền mở popup cho trang web này ở thanh địa chỉ trình duyệt rồi thử lại.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError('Cửa sổ đăng nhập đã bị đóng trước khi hoàn tất đăng nhập.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError(`Phương thức đăng nhập bằng ${providerName} chưa được kích hoạt trong cấu hình Firebase. Vui lòng liên hệ quản trị viên để bật tính năng này.`);
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('Lỗi kết nối mạng. Vui lòng kiểm tra lại kết nối internet của bạn.');
       } else {
-        setError(`Lỗi đăng nhập ${providerName}: ${err.message}`);
+        setError(`Lỗi đăng nhập ${providerName}: ${err.message || 'Vui lòng thử lại hoặc sử dụng đăng nhập bằng Email.'}`);
       }
     } finally {
       setLoading(false);

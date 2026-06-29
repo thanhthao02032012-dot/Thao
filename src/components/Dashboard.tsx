@@ -43,7 +43,7 @@ function PerfMonitor() {
   );
 }
 
-export default function Dashboard({ user, profile, onLogout, onOpenFile, onOpenCloudFile }: { user: User, profile: UserProfile | null, onLogout: () => void, onOpenFile: () => void, onOpenCloudFile?: (file: File) => void }) {
+export default function Dashboard({ user, profile, onLogout, onViewProfile, onOpenFile, onOpenCloudFile }: { user: User, profile: UserProfile | null, onLogout: () => void, onViewProfile: () => void, onOpenFile: () => void, onOpenCloudFile?: (file: File) => void }) {
   const { toast } = useUI();
   const [stats, setStats] = useState<UserStats>({ filesUploaded: 0, hexEdits: 0, bitEdits: 0, hashesGenerated: 0, digitalSignatures: 0, storageUsed: 0 });
   const [recentFiles, setRecentFiles] = useState<FileMeta[]>([]);
@@ -165,21 +165,27 @@ export default function Dashboard({ user, profile, onLogout, onOpenFile, onOpenC
           <PerfMonitor />
           
           {/* User Profile / Logout Quick Card */}
-          <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 border border-red-500/10 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="bg-gradient-to-br from-[#1b1220] to-[#25152a] border border-purple-500/15 rounded-2xl p-5 shadow-lg space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                  <UserIcon className="w-5 h-5 text-white/40" />
+                <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                  <UserIcon className="w-5 h-5 text-purple-400" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 text-left">
                   <p className="text-xs font-bold text-white truncate">{profile?.displayName || user.email}</p>
-                  <p className="text-[10px] text-white/30 truncate">ID: {user.uid.substring(0, 8)}...</p>
+                  <p className="text-[10px] text-white/40 truncate">ID: {user.uid.substring(0, 8)}...</p>
                 </div>
               </div>
+              <button 
+                onClick={onViewProfile}
+                className="px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              >
+                Hồ sơ
+              </button>
             </div>
             <button 
               onClick={onLogout}
-              className="w-full py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center"
+              className="w-full py-2.5 bg-red-600/10 hover:bg-red-600/25 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 mr-2" />
               Đăng xuất
