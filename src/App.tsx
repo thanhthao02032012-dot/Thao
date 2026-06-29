@@ -13,6 +13,8 @@ import { addRecentFile } from './utils/stats';
 import { storeFile } from './utils/db';
 import { useUI } from './components/UIProvider';
 
+import LogoutConfirmModal from './components/LogoutConfirmModal';
+
 export default function App() {
   const { toast } = useUI();
   const [user, setUser] = useState<User | null>(null);
@@ -23,6 +25,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [banned, setBanned] = useState(false);
   const [view, setView] = useState<'auth' | 'dashboard' | 'workspace'>('auth');
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -80,12 +83,15 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
-    if (window.confirm("Bạn có chắc muốn đăng xuất?")) {
-      signOut(auth);
-      handleCloseWorkspace();
-      setBanned(false);
-      setView('auth');
-    }
+    setIsLogoutModalOpen(true);
+  };
+
+  const confirmLogout = () => {
+    signOut(auth);
+    handleCloseWorkspace();
+    setBanned(false);
+    setView('auth');
+    setIsLogoutModalOpen(false);
   };
 
   const handleUploadAndOpen = async (file: File) => {
@@ -266,6 +272,13 @@ export default function App() {
           <p className="text-sm text-white/60">Tải dữ liệu trực tiếp lên máy chủ để xử lý tối ưu</p>
         </div>
       )}
+
+      {/* Logout Confirmation */}
+      <LogoutConfirmModal 
+        isOpen={isLogoutModalOpen} 
+        onClose={() => setIsLogoutModalOpen(false)} 
+        onConfirm={confirmLogout} 
+      />
     </div>
   );
 }

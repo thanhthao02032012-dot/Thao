@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { UserProfile, UserStats, FileMeta } from '../types';
-import { Settings, FileText, HardDrive, Edit3, BarChart2, Cpu, Activity, Zap, ShieldAlert, Layers, ChevronRight, User as UserIcon } from 'lucide-react';
+import { Settings, FileText, HardDrive, Edit3, BarChart2, Cpu, Activity, Zap, ShieldAlert, Layers, ChevronRight, User as UserIcon, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStats, getRecentFiles } from '../utils/stats';
 import { getFile } from '../utils/db';
@@ -163,6 +163,29 @@ export default function Dashboard({ user, profile, onLogout, onOpenFile, onOpenC
         {/* Right Column: Performance */}
         <div className="space-y-6">
           <PerfMonitor />
+          
+          {/* User Profile / Logout Quick Card */}
+          <div className="bg-gradient-to-br from-red-500/10 to-orange-500/10 border border-red-500/10 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                  <UserIcon className="w-5 h-5 text-white/40" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{profile?.displayName || user.email}</p>
+                  <p className="text-[10px] text-white/30 truncate">ID: {user.uid.substring(0, 8)}...</p>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={onLogout}
+              className="w-full py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center"
+            >
+              <LogOut className="w-3.5 h-3.5 mr-2" />
+              Đăng xuất
+            </button>
+          </div>
+
           <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm space-y-4">
             <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Tiện ích nhanh</h3>
             <div className="grid grid-cols-2 gap-2">
