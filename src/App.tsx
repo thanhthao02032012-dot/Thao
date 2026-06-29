@@ -80,10 +80,12 @@ export default function App() {
   }, []);
 
   const handleLogout = () => {
-    signOut(auth);
-    handleCloseWorkspace();
-    setBanned(false);
-    setView('auth');
+    if (window.confirm("Bạn có chắc muốn đăng xuất?")) {
+      signOut(auth);
+      handleCloseWorkspace();
+      setBanned(false);
+      setView('auth');
+    }
   };
 
   const handleUploadAndOpen = async (file: File) => {
