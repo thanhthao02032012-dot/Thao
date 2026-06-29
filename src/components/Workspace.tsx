@@ -179,6 +179,11 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
     }
 
     const runAnalysis = async () => {
+      // Alert for large files
+      if (activeFile.size > 150 * 1024 * 1024) {
+        toast(`Cảnh báo: Tệp tin khá lớn (${(activeFile.size / (1024 * 1024)).toFixed(1)}MB). Quá trình phân tích có thể tốn tài nguyên và thời gian.`, "warning");
+      }
+
       setIsAnalyzing(true);
       setShowAnalysisSummary(false); // Do not block UI
       setAnalysisProgress(0);

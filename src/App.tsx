@@ -11,8 +11,10 @@ import { UserProfile, UserSession } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { addRecentFile } from './utils/stats';
 import { storeFile } from './utils/db';
+import { useUI } from './components/UIProvider';
 
 export default function App() {
+  const { toast } = useUI();
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export default function App() {
               setUser(null);
               setUserProfile(null);
               setBanned(true);
+              setView('auth');
             } else {
               setUser(currentUser);
               setView('dashboard');
@@ -92,6 +95,11 @@ export default function App() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      
+      if (file.size > 150 * 1024 * 1024) {
+        toast(`Tệp tin lớn (${(file.size / 1024 / 1024).toFixed(1)}MB). Chế độ Balanced/Lite sẽ được áp dụng để tiết kiệm RAM.`, "warning");
+      }
+      
       if (user) {
         const generatedId = addRecentFile(user.uid, file.name, file.size, file.type);
         // Skip storing massive files (e.g. > 100MB) to prevent IndexedDB writing freeze
