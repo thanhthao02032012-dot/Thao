@@ -308,15 +308,9 @@ export default function App() {
             </div>
           </nav>
 
-            <div className="flex-1 flex overflow-hidden z-10 relative">
-            <AnimatePresence mode="wait">
+          <div className="flex-1 flex overflow-hidden z-10 relative">
               {view === 'dashboard' && (
-                <motion.div 
-                  key="dashboard"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.3 }}
+                <div 
                   className="flex-1 flex w-full h-full"
                 >
                   <Dashboard 
@@ -335,32 +329,22 @@ export default function App() {
                     }}
                     onViewAdmin={() => setView('admin')}
                   />
-                </motion.div>
+                </div>
               )}
               
               {view === 'admin' && userProfile?.role === 'admin' && (
-                <motion.div 
-                  key="admin"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.25 }}
+                <div 
                   className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
                 >
                   <AdminPanel 
                     currentUserUid={user.uid}
                     onBack={() => setView('dashboard')} 
                   />
-                </motion.div>
+                </div>
               )}
               
               {view === 'profile' && (
-                <motion.div 
-                  key="profile"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.25 }}
+                <div 
                   className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
                 >
                   <UserProfileView 
@@ -369,23 +353,18 @@ export default function App() {
                     onUpdateProfile={handleUpdateProfile} 
                     onBack={() => setView('dashboard')} 
                   />
-                </motion.div>
+                </div>
               )}
               
               {view === 'workspace' && selectedFile && fileId && (
-                <motion.div 
-                  key="workspace"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
+                <div 
                   className="flex-1 flex w-full h-full"
                 >
                   <Workspace file={selectedFile} fileId={fileId} onClose={handleCloseWorkspace} />
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
-          </div>
+            </div>
+
         </>
       )}
 

@@ -53,14 +53,14 @@ export default function FloatingMenuFAB({
               return (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, scale: 0, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0, y: 15 }}
-                  transition={{ type: 'spring', damping: 15, stiffness: 220, delay: index * 0.04 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                   className="flex items-center space-x-2.5"
                 >
                   {/* Text Label tag */}
-                  <div className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md border border-white/10 text-[10px] text-white/80 font-bold uppercase tracking-wider shadow-md">
+                  <div className="px-2.5 py-1 rounded-lg bg-black/90 border border-white/10 text-[10px] text-white/80 font-bold uppercase tracking-wider shadow-sm">
                     {item.label}
                   </div>
                   
@@ -68,7 +68,7 @@ export default function FloatingMenuFAB({
                   <button
                     onClick={() => item.active && handleAction(item.onClick)}
                     disabled={!item.active}
-                    className={`w-10 h-10 rounded-full bg-gradient-to-tr ${item.color} flex items-center justify-center text-white shadow-xl transition-all hover:scale-110 active:scale-95 disabled:opacity-30 disabled:scale-100 cursor-pointer`}
+                    className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-md disabled:opacity-30 disabled:scale-100 cursor-pointer"
                   >
                     <Icon className="w-4.5 h-4.5" />
                   </button>
@@ -82,11 +82,11 @@ export default function FloatingMenuFAB({
       {/* Primary Floating Trigger Button */}
       <button
         onClick={toggleMenu}
-        className="pointer-events-auto w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 flex items-center justify-center text-white shadow-[0_8px_32px_rgba(168,85,247,0.4)] border border-purple-500/30 transition-transform active:scale-90 hover:scale-105 shrink-0 cursor-pointer"
+        className="pointer-events-auto w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 flex items-center justify-center text-white shadow-md border border-purple-500/30 shrink-0 cursor-pointer"
       >
         <motion.div
           animate={{ rotate: isOpen ? 135 : 0 }}
-          transition={{ type: 'spring', stiffness: 250, damping: 15 }}
+          transition={{ duration: 0.15, ease: 'easeInOut' }}
         >
           <Plus className="w-7 h-7" />
         </motion.div>

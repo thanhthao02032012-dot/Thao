@@ -291,24 +291,15 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
-      className="w-full max-w-md mx-auto relative z-10"
-    >
-      <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] p-8 relative overflow-hidden">
+    <div className="w-full max-w-md mx-auto relative z-10">
+      <div className="bg-[#121829] border border-white/10 rounded-2xl shadow-lg p-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 pointer-events-none"></div>
         <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-50"></div>
         
         <div className="text-center mb-8 relative z-10">
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-purple-500/30"
-          >
+          <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-xl mx-auto mb-4 flex items-center justify-center shadow-md">
             <span className="font-mono font-bold text-white text-2xl tracking-tighter">Hx</span>
-          </motion.div>
+          </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
             {isForgotEmail ? (language === 'vi' ? 'Tìm tài khoản' : 'Find Account') : isForgotPassword ? (language === 'vi' ? 'Khôi phục mật khẩu' : 'Reset Password') : (isLogin ? t('welcomeBack') : (language === 'vi' ? 'Tạo tài khoản mới' : 'Create New Account'))}
           </h2>
@@ -523,6 +514,6 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

@@ -20,16 +20,18 @@ export default function LogoutConfirmModal({ isOpen, onClose, onConfirm }: Logou
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60"
           />
           
           {/* Modal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-sm bg-[#121829] border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="relative w-full max-w-sm bg-[#121829] border border-white/10 rounded-2xl shadow-xl overflow-hidden"
           >
             <div className="p-6 text-center space-y-4">
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
@@ -52,7 +54,7 @@ export default function LogoutConfirmModal({ isOpen, onClose, onConfirm }: Logou
                 </button>
                 <button
                   onClick={onConfirm}
-                  className="px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-sm font-semibold text-white shadow-lg shadow-red-600/20 transition-all flex items-center justify-center cursor-pointer"
+                  className="px-4 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-sm font-semibold text-white shadow-md transition-all flex items-center justify-center cursor-pointer"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
                   {language === 'vi' ? 'Đăng xuất' : 'Sign out'}

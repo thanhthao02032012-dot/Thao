@@ -73,35 +73,35 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
         <AnimatePresence>
           {toasts.map((t) => {
             let Icon = Info;
-            let bgColor = 'bg-[#18181b]/90 border-[#27272a]/50 text-white';
+            let bgColor = 'bg-[#18181b] border-[#27272a] text-white';
             let iconColor = 'text-blue-400';
             
             if (t.type === 'success') {
               Icon = CheckCircle2;
-              bgColor = 'bg-emerald-950/80 border-emerald-500/20 text-emerald-100 shadow-[0_0_20px_rgba(16,185,129,0.15)]';
+              bgColor = 'bg-emerald-950 border-emerald-500/20 text-emerald-100 shadow-md';
               iconColor = 'text-emerald-400';
             } else if (t.type === 'error') {
               Icon = XCircle;
-              bgColor = 'bg-red-950/80 border-red-500/20 text-red-100 shadow-[0_0_20px_rgba(239,68,68,0.15)]';
+              bgColor = 'bg-red-950 border-red-500/20 text-red-100 shadow-md';
               iconColor = 'text-red-400';
             } else if (t.type === 'warning') {
               Icon = AlertCircle;
-              bgColor = 'bg-amber-950/80 border-amber-500/20 text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.15)]';
+              bgColor = 'bg-amber-950 border-amber-500/20 text-amber-100 shadow-md';
               iconColor = 'text-amber-400';
             } else if (t.type === 'info') {
               Icon = Info;
-              bgColor = 'bg-purple-950/80 border-purple-500/20 text-purple-100 shadow-[0_0_20px_rgba(168,85,247,0.15)]';
+              bgColor = 'bg-purple-950 border-purple-500/20 text-purple-100 shadow-md';
               iconColor = 'text-purple-400';
             }
 
             return (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 0, y: 20, scale: 0.9, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -10, scale: 0.95, filter: 'blur(4px)' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                className={`pointer-events-auto flex items-center justify-between p-4 rounded-2xl border backdrop-blur-xl ${bgColor} shadow-2xl overflow-hidden`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className={`pointer-events-auto flex items-center justify-between p-4 rounded-xl border ${bgColor} overflow-hidden`}
               >
                 <div className="flex items-center space-x-3 flex-1">
                   <Icon className={`w-5 h-5 ${iconColor} shrink-0`} />
@@ -128,17 +128,18 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               onClick={handleCancel}
-              className="absolute inset-0 bg-[#09090b]/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-[#09090b]/80"
             />
             
             {/* Box */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, scale: 0.95, y: 15, filter: 'blur(8px)' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="relative w-full max-w-md bg-[#0f0f13]/90 border border-white/10 p-6 rounded-3xl backdrop-blur-2xl shadow-2xl z-10 flex flex-col text-left"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="relative w-full max-w-md bg-[#0f0f13] border border-white/10 p-6 rounded-2xl shadow-xl z-10 flex flex-col text-left"
             >
               <h3 className="text-base font-semibold text-white mb-2">{dialog.title}</h3>
               <p className="text-xs text-white/60 mb-6 leading-relaxed">{dialog.message}</p>
@@ -152,7 +153,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-colors shadow-lg shadow-purple-600/20 hover:shadow-purple-600/30"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-colors shadow-md"
                 >
                   {dialog.confirmText || 'Xác nhận'}
                 </button>
