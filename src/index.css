@@ -85,3 +85,23 @@ html {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Mobile-specific Performance Boosts (Lag Reduction) */
+@media (max-width: 768px) {
+  /* Disable heavy real-time pixel-blur processing on mobile */
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  
+  /* Fallback: use slightly opaque solid background colors to maintain high contrast */
+  .backdrop-blur-sm, .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl, .backdrop-blur-2xl {
+    background-color: rgba(9, 9, 11, 0.95) !important;
+  }
+  
+  /* Disable intensive blob animation to save battery and GPU cycles */
+  .animate-blob {
+    animation: none !important;
+    display: none !important;
+  }
+}

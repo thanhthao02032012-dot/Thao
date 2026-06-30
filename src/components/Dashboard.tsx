@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { UserProfile, UserStats, FileMeta } from '../types';
-import { Settings, FileText, HardDrive, Edit3, BarChart2, Cpu, Activity, Zap, ShieldAlert, Layers, ChevronRight, User as UserIcon, LogOut } from 'lucide-react';
+import { Settings, FileText, HardDrive, Edit3, BarChart2, Cpu, Activity, Zap, ShieldAlert, Layers, ChevronRight, User as UserIcon, LogOut, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getStats, getRecentFiles } from '../utils/stats';
 import { getFile } from '../utils/db';
@@ -45,7 +45,7 @@ function PerfMonitor() {
   );
 }
 
-export default function Dashboard({ user, profile, onLogout, onViewProfile, onOpenFile, onOpenCloudFile }: { user: User, profile: UserProfile | null, onLogout: () => void, onViewProfile: () => void, onOpenFile: () => void, onOpenCloudFile?: (file: File) => void }) {
+export default function Dashboard({ user, profile, onLogout, onViewProfile, onOpenFile, onOpenCloudFile, onViewAdmin }: { user: User, profile: UserProfile | null, onLogout: () => void, onViewProfile: () => void, onOpenFile: () => void, onOpenCloudFile?: (file: File) => void, onViewAdmin?: () => void }) {
   const { toast } = useUI();
   const { language, t } = useLanguage();
   const [stats, setStats] = useState<UserStats>({ filesUploaded: 0, hexEdits: 0, bitEdits: 0, hashesGenerated: 0, digitalSignatures: 0, storageUsed: 0 });
@@ -186,6 +186,15 @@ export default function Dashboard({ user, profile, onLogout, onViewProfile, onOp
                 {language === 'vi' ? 'Hồ sơ' : 'Profile'}
               </button>
             </div>
+            {profile?.role === 'admin' && onViewAdmin && (
+              <button 
+                onClick={onViewAdmin}
+                className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 border border-purple-500/30 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center cursor-pointer shadow-lg shadow-purple-500/20"
+              >
+                <Shield className="w-3.5 h-3.5 mr-2 text-white" />
+                {language === 'vi' ? 'Cổng Quản Trị Admin' : 'Admin Portal'}
+              </button>
+            )}
             <button 
               onClick={onLogout}
               className="w-full py-2.5 bg-red-600/10 hover:bg-red-600/25 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center cursor-pointer"

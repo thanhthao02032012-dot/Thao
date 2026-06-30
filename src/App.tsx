@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { FileUp, LogOut, ShieldAlert, Monitor, Home, Loader2 } from 'lucide-react';
 import Auth from './components/Auth';
 import Workspace from './components/Workspace';
@@ -16,6 +16,7 @@ import { useLanguage } from './components/LanguageProvider';
 
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import UserProfileView from './components/UserProfile';
+import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const { toast } = useUI();
@@ -27,63 +28,123 @@ export default function App() {
   const [fileId, setFileId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [banned, setBanned] = useState(false);
-  const [view, setView] = useState<'auth' | 'dashboard' | 'workspace' | 'profile'>('auth');
+  const [view, setView] = useState<'auth' | 'dashboard' | 'workspace' | 'profile' | 'admin'>('auth');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
       if (currentUser) {
         try {
           const docRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            setUser(currentUser);
-            setUserProfile(docSnap.data() as UserProfile);
-            setBanned(false);
-            setView('dashboard');
-            
-            // Log session info
-            try {
-              const session: UserSession = {
-                uid: currentUser.uid,
-                device: navigator.platform || 'Unknown',
-                browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Firefox') ? 'Firefox' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown',
-                os: navigator.platform || 'Unknown',
-                lastLogin: Date.now()
-              };
-              await setDoc(doc(db, 'sessions', `${currentUser.uid}_${Date.now()}`), session);
-            } catch (e) {
-              console.warn("Could not log session");
-            }
-          } else {
-            const creationTime = new Date(currentUser.metadata.creationTime || '').getTime();
-            const isJustCreated = Date.now() - creationTime < 10000;
-            
-            if (!isJustCreated) {
-              await signOut(auth);
-              setUser(null);
-              setUserProfile(null);
-              setBanned(true);
-              setView('auth');
+
+          unsubscribeProfile = onSnapshot(docRef, async (docSnap) => {
+            if (docSnap.exists()) {
+              const profileData = docSnap.data() as UserProfile;
+              if (profileData.banned === true) {
+                if (unsubscribeProfile) {
+                  unsubscribeProfile();
+                  unsubscribeProfile = null;
+                }
+                await signOut(auth);
+                setUser(null);
+                setUserProfile(null);
+                setBanned(true);
+                setView('auth');
+                toast(language === 'vi' ? "Tài khoản của bạn đã bị cấm bởi Admin." : "Your account has been banned by Admin.", "error");
+              } else {
+                setUser(currentUser);
+                setUserProfile(profileData);
+                setBanned(false);
+                setView(prev => prev === 'auth' ? 'dashboard' : prev);
+
+                // Sync to public profiles
+                try {
+                  const pubRef = doc(db, 'public_profiles', currentUser.uid);
+                  const emailToMask = profileData.email || currentUser.email || '';
+                  let currentMasked = '***';
+                  if (emailToMask && emailToMask.includes('@')) {
+                    const [local, domain] = emailToMask.split('@');
+                    if (local.length > 2) {
+                      currentMasked = local.slice(0, 2) + '*'.repeat(Math.max(3, local.length - 4)) + local.slice(-2) + '@' + domain;
+                    } else {
+                      currentMasked = local[0] + '***@' + domain;
+                    }
+                  }
+
+                  await setDoc(pubRef, {
+                    uid: currentUser.uid,
+                    displayName: profileData.displayName || currentUser.displayName || 'Người dùng',
+                    emailMasked: currentMasked,
+                    provider: profileData.provider || 'Email',
+                    createdAt: profileData.createdAt || Date.now()
+                  }, { merge: true });
+                } catch (pubErr) {
+                  console.warn("Could not sync public profile:", pubErr);
+                }
+              }
             } else {
-              setUser(currentUser);
-              setView('dashboard');
+              const creationTime = new Date(currentUser.metadata.creationTime || '').getTime();
+              const isJustCreated = Date.now() - creationTime < 15000;
+
+              if (!isJustCreated) {
+                if (unsubscribeProfile) {
+                  unsubscribeProfile();
+                  unsubscribeProfile = null;
+                }
+                await signOut(auth);
+                setUser(null);
+                setUserProfile(null);
+                setBanned(true);
+                setView('auth');
+              } else {
+                setUser(currentUser);
+                setView(prev => prev === 'auth' ? 'dashboard' : prev);
+              }
             }
+            setLoading(false);
+          }, (err) => {
+            console.error("Profile subscription error:", err);
+            setLoading(false);
+          });
+
+          // Log session info
+          try {
+            const session: UserSession = {
+              uid: currentUser.uid,
+              device: navigator.platform || 'Unknown',
+              browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Firefox') ? 'Firefox' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown',
+              os: navigator.platform || 'Unknown',
+              lastLogin: Date.now()
+            };
+            await setDoc(doc(db, 'sessions', `${currentUser.uid}_${Date.now()}`), session);
+          } catch (e) {
+            console.warn("Could not log session");
           }
+
         } catch (error) {
-          console.error("Error fetching user profile:", error);
+          console.error("Error setting up user profile snapshot:", error);
+          setLoading(false);
         }
       } else {
         setUser(null);
         setUserProfile(null);
         setView('auth');
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
+  }, [language]);
 
   const handleLogout = () => {
     setIsLogoutModalOpen(true);
@@ -206,7 +267,7 @@ export default function App() {
 
               <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
 
-              {(view === 'workspace' || view === 'profile') && (
+              {(view === 'workspace' || view === 'profile' || view === 'admin') && (
                 <button
                   onClick={() => {
                     if (view === 'workspace') {
@@ -272,6 +333,23 @@ export default function App() {
                     onOpenCloudFile={async (file) => {
                       await handleUploadAndOpen(file);
                     }}
+                    onViewAdmin={() => setView('admin')}
+                  />
+                </motion.div>
+              )}
+              
+              {view === 'admin' && userProfile?.role === 'admin' && (
+                <motion.div 
+                  key="admin"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
+                >
+                  <AdminPanel 
+                    currentUserUid={user.uid}
+                    onBack={() => setView('dashboard')} 
                   />
                 </motion.div>
               )}

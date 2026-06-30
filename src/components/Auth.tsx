@@ -7,16 +7,67 @@ import {
   AuthProvider,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { Lock, Mail, Github, Chrome, ArrowRight, ShieldAlert } from 'lucide-react';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { Lock, Mail, Github, Chrome, ArrowRight, ShieldAlert, User as UserIcon } from 'lucide-react';
 import { UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageProvider';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export default function Auth({ onSuccess }: { onSuccess: () => void }) {
   const { language, t } = useLanguage();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isForgotEmail, setIsForgotEmail] = useState(false);
+  const [recoveryDisplayName, setRecoveryDisplayName] = useState('');
+  const [recoveryResults, setRecoveryResults] = useState<{ emailMasked: string, provider: string }[] | null>(null);
+  const [regDisplayName, setRegDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -86,7 +137,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
     setError('');
     setSuccessMsg('');
 
-    if (requiresCaptcha) {
+    if (requiresCaptcha && !isForgotEmail) {
       if (parseInt(captchaAnswer) !== captchaQuestion.a + captchaQuestion.b) {
         setError(language === 'vi' ? 'Mã CAPTCHA không chính xác. Vui lòng thử lại.' : 'Incorrect CAPTCHA answer. Please try again.');
         generateCaptcha();
@@ -97,6 +148,41 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
     setLoading(true);
 
     try {
+      if (isForgotEmail) {
+        setRecoveryResults(null);
+        const trimmedName = recoveryDisplayName.trim();
+        if (!trimmedName) {
+          setError(language === 'vi' ? 'Vui lòng nhập tên hiển thị để khôi phục.' : 'Please enter a display name to recover.');
+          setLoading(false);
+          return;
+        }
+
+        let querySnapshot;
+        try {
+          const q = query(collection(db, 'public_profiles'), where('displayName', '==', trimmedName));
+          querySnapshot = await getDocs(q);
+        } catch (dbErr: any) {
+          handleFirestoreError(dbErr, OperationType.LIST, 'public_profiles');
+        }
+        
+        if (querySnapshot && querySnapshot.empty) {
+          setError(language === 'vi' ? 'Không tìm thấy tài khoản nào khớp với tên hiển thị này.' : 'No accounts match this display name.');
+        } else if (querySnapshot) {
+          const results: { emailMasked: string, provider: string }[] = [];
+          querySnapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            results.push({
+              emailMasked: data.emailMasked || '***',
+              provider: data.provider || 'Email'
+            });
+          });
+          setRecoveryResults(results);
+          setSuccessMsg(language === 'vi' ? `Tìm thấy ${results.length} tài khoản liên kết.` : `Found ${results.length} matching accounts.`);
+        }
+        setLoading(false);
+        return;
+      }
+
       if (isForgotPassword) {
         await sendPasswordResetEmail(auth, email);
         setSuccessMsg(language === 'vi' ? 'Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư của bạn.' : 'Password reset email sent. Please check your inbox.');
@@ -108,17 +194,52 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
+        const trimmedRegDisplayName = regDisplayName.trim();
+        if (!trimmedRegDisplayName) {
+          setError(language === 'vi' ? 'Vui lòng nhập tên hiển thị / tên tài khoản.' : 'Please enter a display name / account name.');
+          setLoading(false);
+          return;
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const userProfile: UserProfile = {
           uid: user.uid,
           email: user.email,
+          displayName: trimmedRegDisplayName,
           provider: 'Email',
           role: user.email === 'thanhthao02032012@gmail.com' ? 'admin' : 'user',
           createdAt: Date.now()
         };
         try {
-          await setDoc(doc(db, 'users', user.uid), userProfile);
+          try {
+            await setDoc(doc(db, 'users', user.uid), userProfile);
+          } catch (errUser) {
+            handleFirestoreError(errUser, OperationType.WRITE, `users/${user.uid}`);
+          }
+          
+          let currentMasked = '***';
+          const emailToMask = user.email || '';
+          if (emailToMask && emailToMask.includes('@')) {
+            const [local, domain] = emailToMask.split('@');
+            if (local.length > 2) {
+              currentMasked = local.slice(0, 2) + '*'.repeat(Math.max(3, local.length - 4)) + local.slice(-2) + '@' + domain;
+            } else {
+              currentMasked = local[0] + '***@' + domain;
+            }
+          }
+
+          try {
+            await setDoc(doc(db, 'public_profiles', user.uid), {
+              uid: user.uid,
+              displayName: trimmedRegDisplayName,
+              emailMasked: currentMasked,
+              provider: 'Email',
+              createdAt: Date.now()
+            });
+          } catch (errPub) {
+            handleFirestoreError(errPub, OperationType.WRITE, `public_profiles/${user.uid}`);
+          }
         } catch (dbErr) {
           console.warn("Could not save user profile:", dbErr);
         }
@@ -129,13 +250,32 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
       onSuccess();
     } catch (err: any) {
       let friendlyMessage = err.message || (language === 'vi' ? 'Đã xảy ra lỗi' : 'An error occurred');
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      
+      // Check if it is a security rule / permission error
+      let isPermissionError = false;
+      if (err.message && err.message.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error && (parsed.error.includes('permission') || parsed.error.includes('denied'))) {
+            isPermissionError = true;
+          }
+        } catch (e) {}
+      } else if (err.code === 'permission-denied' || (err.message && err.message.includes('permission'))) {
+        isPermissionError = true;
+      }
+
+      if (isPermissionError) {
+        friendlyMessage = language === 'vi' 
+          ? 'Hệ thống từ chối truy cập do lỗi phân quyền. Vui lòng liên hệ Admin để được hỗ trợ.' 
+          : 'Access denied due to system permission rules. Please contact Admin for assistance.';
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
         friendlyMessage = language === 'vi' ? 'Email hoặc mật khẩu không chính xác.' : 'Incorrect email or password.';
       } else if (err.code === 'auth/email-already-in-use') {
         friendlyMessage = language === 'vi' ? 'Email này đã được sử dụng.' : 'This email is already in use.';
       } else if (err.code === 'auth/weak-password') {
         friendlyMessage = language === 'vi' ? 'Mật khẩu quá yếu (tối thiểu 6 ký tự).' : 'Weak password (minimum 6 characters).';
       }
+      
       setError(friendlyMessage);
       
       if (isLogin) {
@@ -170,10 +310,10 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
             <span className="font-mono font-bold text-white text-2xl tracking-tighter">Hx</span>
           </motion.div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            {isForgotPassword ? (language === 'vi' ? 'Khôi phục mật khẩu' : 'Reset Password') : (isLogin ? t('welcomeBack') : (language === 'vi' ? 'Tạo tài khoản mới' : 'Create New Account'))}
+            {isForgotEmail ? (language === 'vi' ? 'Tìm tài khoản' : 'Find Account') : isForgotPassword ? (language === 'vi' ? 'Khôi phục mật khẩu' : 'Reset Password') : (isLogin ? t('welcomeBack') : (language === 'vi' ? 'Tạo tài khoản mới' : 'Create New Account'))}
           </h2>
           <p className="text-white/60 text-sm mt-2">
-            {isForgotPassword ? (language === 'vi' ? 'Nhập email để nhận liên kết đặt lại mật khẩu.' : 'Enter email to receive reset link.') : t('authDesc')}
+            {isForgotEmail ? (language === 'vi' ? 'Nhập tên hiển thị chính xác để khôi phục email tài khoản.' : 'Enter your exact display name to find your account email.') : isForgotPassword ? (language === 'vi' ? 'Nhập email để nhận liên kết đặt lại mật khẩu.' : 'Enter email to receive reset link.') : t('authDesc')}
           </p>
         </div>
 
@@ -190,7 +330,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
           </div>
         )}
 
-        {!isForgotPassword && (
+        {!isForgotPassword && !isForgotEmail && (
           <div className="space-y-3 mb-6">
             <button 
               onClick={() => handleProviderSignIn(googleProvider, 'Google')}
@@ -219,47 +359,89 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">{t('emailAddress')}</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-white placeholder-white/20"
-                placeholder="you@example.com"
-              />
-            </div>
-          </div>
-
-          {!isForgotPassword && (
+          {isForgotEmail ? (
             <div>
-              <div className="flex justify-between items-center mb-1 ml-1">
-                <label className="block text-xs font-medium text-white/60 uppercase tracking-wider">{t('password')}</label>
-                {isLogin && (
-                  <button type="button" onClick={() => setIsForgotPassword(true)} className="text-xs text-purple-400 hover:text-purple-300 transition-colors cursor-pointer">
-                    {t('forgotPassword')}
-                  </button>
-                )}
-              </div>
+              <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">{language === 'vi' ? 'Tên hiển thị để khôi phục' : 'Display name to find'}</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
                 <input
-                  type="password"
+                  type="text"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={recoveryDisplayName}
+                  onChange={(e) => setRecoveryDisplayName(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-white placeholder-white/20"
-                  placeholder="••••••••"
-                  minLength={6}
+                  placeholder={language === 'vi' ? 'Ví dụ: thhao02' : 'e.g. thhao02'}
                 />
               </div>
             </div>
+          ) : (
+            <>
+              {!isLogin && !isForgotPassword && (
+                <div>
+                  <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">{language === 'vi' ? 'Tên hiển thị / Tên tài khoản' : 'Display name / Account name'}</label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                    <input
+                      type="text"
+                      required
+                      value={regDisplayName}
+                      onChange={(e) => setRegDisplayName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-white placeholder-white/20"
+                      placeholder={language === 'vi' ? 'Ví dụ: thhao02' : 'e.g. thhao02'}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-white/60 mb-1 ml-1 uppercase tracking-wider">{t('emailAddress')}</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-white placeholder-white/20"
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              {!isForgotPassword && (
+                <div>
+                  <div className="flex justify-between items-center mb-1 ml-1">
+                    <label className="block text-xs font-medium text-white/60 uppercase tracking-wider">{t('password')}</label>
+                    {isLogin && (
+                      <div className="flex items-center space-x-2 text-xs">
+                        <button type="button" onClick={() => { setIsForgotEmail(true); setIsForgotPassword(false); setError(''); setSuccessMsg(''); setRecoveryResults(null); }} className="text-purple-400 hover:text-purple-300 transition-colors cursor-pointer">
+                          {language === 'vi' ? 'Quên tài khoản?' : 'Forgot username?'}
+                        </button>
+                        <span className="text-white/20 select-none">•</span>
+                        <button type="button" onClick={() => { setIsForgotPassword(true); setIsForgotEmail(false); setError(''); setSuccessMsg(''); }} className="text-purple-400 hover:text-purple-300 transition-colors cursor-pointer">
+                          {t('forgotPassword')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all text-white placeholder-white/20"
+                      placeholder="••••••••"
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {requiresCaptcha && (
+          {requiresCaptcha && !isForgotEmail && (
             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl mt-4">
               <div className="flex items-center mb-2">
                 <ShieldAlert className="w-4 h-4 text-orange-400 mr-2" />
@@ -282,6 +464,25 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
             </div>
           )}
 
+          {isForgotEmail && recoveryResults && (
+            <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl space-y-3 mt-4 border-dashed">
+              <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">{language === 'vi' ? 'Tài khoản tìm thấy:' : 'Accounts found:'}</p>
+              <div className="space-y-2">
+                {recoveryResults.map((res, i) => (
+                  <div key={i} className="flex justify-between items-center bg-black/30 p-3 rounded-lg border border-white/5">
+                    <div className="text-left min-w-0">
+                      <p className="text-sm font-mono text-white select-all truncate">{res.emailMasked}</p>
+                      <p className="text-[10px] text-white/40">{language === 'vi' ? 'Phương thức đăng nhập:' : 'Login Method:'} {res.provider}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-purple-500/20 text-purple-300 rounded font-semibold ml-2 whitespace-nowrap">
+                      {res.provider === 'Email' ? (language === 'vi' ? 'Mật khẩu' : 'Password') : res.provider}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -294,7 +495,7 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
               </span>
             ) : (
               <>
-                {isForgotPassword ? (language === 'vi' ? 'Gửi liên kết khôi phục' : 'Send reset link') : (isLogin ? t('loginButton') : t('registerButton'))}
+                {isForgotEmail ? (language === 'vi' ? 'Tìm tài khoản liên kết' : 'Find accounts') : isForgotPassword ? (language === 'vi' ? 'Gửi liên kết khôi phục' : 'Send reset link') : (isLogin ? t('loginButton') : t('registerButton'))}
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
               </>
             )}
@@ -302,8 +503,11 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
         </form>
 
         <div className="mt-6 text-center">
-          {isForgotPassword ? (
-            <button onClick={() => setIsForgotPassword(false)} className="text-sm font-medium text-white/60 hover:text-white transition-colors cursor-pointer">
+          {isForgotPassword || isForgotEmail ? (
+            <button 
+              onClick={() => { setIsForgotPassword(false); setIsForgotEmail(false); setError(''); setSuccessMsg(''); setRecoveryResults(null); }} 
+              className="text-sm font-medium text-white/60 hover:text-white transition-colors cursor-pointer"
+            >
               {language === 'vi' ? 'Quay lại đăng nhập' : 'Back to login'}
             </button>
           ) : (

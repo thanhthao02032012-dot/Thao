@@ -10,6 +10,7 @@ export interface UserProfile {
   createdAt: number;
   provider?: string;
   country?: string;
+  banned?: boolean;
 }
 
 export interface UserSettings {

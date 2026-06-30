@@ -6,11 +6,9 @@ import { LanguageProvider } from './components/LanguageProvider.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <UIProvider>
-      <LanguageProvider>
-        <App />
-      </LanguageProvider>
-    </UIProvider>
-  </StrictMode>,
+  <UIProvider>
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
+  </UIProvider>
 );
