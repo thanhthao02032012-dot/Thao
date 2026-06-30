@@ -677,7 +677,18 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       onClearPatches={() => setActivePatches(new Map())}
                       onImportPatches={(imported) => setActivePatches(imported)}
                       perfMode={perfMode}
-                      onChangePerfMode={setPerfMode}
+                      onChangePerfMode={(mode) => {
+                        setPerfMode(mode);
+                        const fileCacheKey = `${activeFile.name}_${activeFile.size}_${activeFile.lastModified}`;
+                        setAnalysisCache(prev => {
+                          const next = { ...prev };
+                          delete next[fileCacheKey];
+                          return next;
+                        });
+                        setIsAnalyzing(true);
+                        setShowAnalysisSummary(true);
+                        toast(mode === 'professional' ? "Đang phân tích sâu..." : "Đang thay đổi chế độ hiệu năng...", "info");
+                      }}
                       scanMetrics={scanMetrics}
                       appMode={appMode}
                       setAppMode={setAppMode}

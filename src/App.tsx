@@ -10,17 +10,37 @@ import PremiumBackground from './components/PremiumBackground';
 import { UserProfile, UserSession } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { addRecentFile } from './utils/stats';
-import { storeFile } from './utils/db';
+import { storeFile, getFile } from './utils/db';
 import { useUI } from './components/UIProvider';
 import { useLanguage } from './components/LanguageProvider';
+import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import UserProfileView from './components/UserProfile';
 import AdminPanel from './components/AdminPanel';
 
+interface ProtectedRouteProps {
+  user: User | null;
+  loading: boolean;
+}
+
+function ProtectedRoute({ user, loading }: ProtectedRouteProps) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0B0F19]">
+        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+  return user ? <Outlet /> : <Navigate to="/auth" replace />;
+}
+
 export default function App() {
   const { toast } = useUI();
   const { language, setLanguage, t } = useLanguage();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +48,6 @@ export default function App() {
   const [fileId, setFileId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [banned, setBanned] = useState(false);
-  const [view, setView] = useState<'auth' | 'dashboard' | 'workspace' | 'profile' | 'admin'>('auth');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
@@ -56,13 +75,15 @@ export default function App() {
                 setUser(null);
                 setUserProfile(null);
                 setBanned(true);
-                setView('auth');
+                navigate('/auth');
                 toast(language === 'vi' ? "Tài khoản của bạn đã bị cấm bởi Admin." : "Your account has been banned by Admin.", "error");
               } else {
                 setUser(currentUser);
                 setUserProfile(profileData);
                 setBanned(false);
-                setView(prev => prev === 'auth' ? 'dashboard' : prev);
+                if (location.pathname === '/auth') {
+                  navigate('/');
+                }
 
                 // Sync to public profiles
                 try {
@@ -102,10 +123,12 @@ export default function App() {
                 setUser(null);
                 setUserProfile(null);
                 setBanned(true);
-                setView('auth');
+                navigate('/auth');
               } else {
                 setUser(currentUser);
-                setView(prev => prev === 'auth' ? 'dashboard' : prev);
+                if (location.pathname === '/auth') {
+                  navigate('/');
+                }
               }
             }
             setLoading(false);
@@ -135,7 +158,9 @@ export default function App() {
       } else {
         setUser(null);
         setUserProfile(null);
-        setView('auth');
+        if (location.pathname !== '/auth') {
+          navigate('/auth');
+        }
         setLoading(false);
       }
     });
@@ -146,6 +171,23 @@ export default function App() {
     };
   }, [language]);
 
+  // Restore active file session on page refresh (F5)
+  useEffect(() => {
+    const restoreActiveFile = async () => {
+      const activeId = sessionStorage.getItem('active_file_id');
+      if (activeId && !selectedFile) {
+        const file = await getFile('last_active_file');
+        if (file) {
+          setSelectedFile(file);
+          setFileId(activeId);
+        }
+      }
+    };
+    if (user) {
+      restoreActiveFile();
+    }
+  }, [user]);
+
   const handleLogout = () => {
     setIsLogoutModalOpen(true);
   };
@@ -154,7 +196,7 @@ export default function App() {
     signOut(auth);
     handleCloseWorkspace();
     setBanned(false);
-    setView('auth');
+    navigate('/auth');
     setIsLogoutModalOpen(false);
   };
 
@@ -165,7 +207,13 @@ export default function App() {
   const handleUploadAndOpen = async (file: File) => {
     setSelectedFile(file);
     setFileId('local_stream');
-    setView('workspace');
+    sessionStorage.setItem('active_file_id', 'local_stream');
+    try {
+      await storeFile('last_active_file', file);
+    } catch (e) {
+      console.error(e);
+    }
+    navigate('/workspace');
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -205,7 +253,8 @@ export default function App() {
     }
     setSelectedFile(null);
     setFileId(null);
-    setView('dashboard');
+    sessionStorage.removeItem('active_file_id');
+    navigate('/');
   };
 
   if (loading) {
@@ -236,137 +285,158 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#09090B] text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col relative overflow-hidden">
-      {/* Premium animated background */}
       <PremiumBackground />
 
-      {!user ? (
-        <div className="flex-1 flex items-center justify-center p-4 z-10">
-          <Auth onSuccess={() => setView('dashboard')} />
-        </div>
-      ) : (
-        <>
-          {/* Global Navbar */}
-          <nav className="bg-white/5 backdrop-blur-md border-b border-white/10 px-6 py-3 flex items-center justify-between shadow-sm z-20">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-blue-600 text-white rounded-md flex items-center justify-center font-bold font-mono">
-                Hx
+      <Routes>
+        {/* Auth Route */}
+        <Route path="/auth" element={
+          user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-4 z-10">
+              <Auth onSuccess={() => navigate('/')} />
+            </div>
+          )
+        } />
+
+        {/* Protected Routes Wrapper */}
+        <Route element={<ProtectedRoute user={user} loading={loading} />}>
+          {/* Main Layout containing Navbar */}
+          <Route element={
+            <>
+              {/* Global Navbar */}
+              <nav className="bg-white/5 border-b border-white/10 px-6 py-3 flex items-center justify-between shadow-sm z-20">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-blue-600 text-white rounded-md flex items-center justify-center font-bold font-mono">
+                    Hx
+                  </div>
+                  <span className="font-semibold text-white text-lg tracking-tight">WebHexed</span>
+                </div>
+                
+                <div className="flex items-center space-x-2 sm:space-x-4">
+                  {/* Language Switcher */}
+                  <button
+                    onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
+                    className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150 active:scale-95 shrink-0"
+                    title={language === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+                  >
+                    <span className="text-sm leading-none">{language === 'vi' ? '🇻🇳' : '🇬🇧'}</span>
+                    <span className="uppercase font-mono text-[10px] tracking-wider leading-none">{language === 'vi' ? 'VI' : 'EN'}</span>
+                  </button>
+
+                  <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
+
+                  <Routes>
+                    <Route path="/workspace" element={
+                      <button
+                        onClick={handleCloseWorkspace}
+                        className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
+                      >
+                        <Home className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                      </button>
+                    } />
+                    <Route path="/profile" element={
+                      <button
+                        onClick={() => navigate('/')}
+                        className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
+                      >
+                        <Home className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                      </button>
+                    } />
+                    <Route path="/admin" element={
+                      <button
+                        onClick={() => navigate('/')}
+                        className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
+                      >
+                        <Home className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                      </button>
+                    } />
+                    <Route path="/" element={
+                      <label className="flex items-center px-2 sm:px-4 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-md transition-colors text-xs sm:text-sm font-semibold cursor-pointer border border-blue-500/30">
+                        <FileUp className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">{t('openFile')}</span>
+                        <input type="file" className="hidden" onChange={handleFileChange} />
+                      </label>
+                    } />
+                  </Routes>
+                  
+                  <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
+                  
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className={`text-xs sm:text-sm hover:text-purple-300 font-semibold transition-colors truncate max-w-[80px] sm:max-w-[150px] cursor-pointer ${location.pathname === '/profile' ? 'text-purple-400' : 'text-white/70'}`}
+                    title="Xem hồ sơ cá nhân"
+                  >
+                    {userProfile?.displayName || user?.email}
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center px-2 py-1.5 text-xs sm:text-sm font-semibold text-red-400 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </nav>
+
+              <div className="flex-1 flex overflow-hidden z-10 relative">
+                <Outlet />
               </div>
-              <span className="font-semibold text-white text-lg tracking-tight">WebHexed</span>
-            </div>
-            
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              {/* Language Switcher */}
-              <button
-                onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150 active:scale-95 shrink-0"
-                title={language === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
-              >
-                <span className="text-sm leading-none">{language === 'vi' ? '🇻🇳' : '🇬🇧'}</span>
-                <span className="uppercase font-mono text-[10px] tracking-wider leading-none">{language === 'vi' ? 'VI' : 'EN'}</span>
-              </button>
+            </>
+          }>
+            {/* Nested Child Routes inside Layout with Navbar */}
+            <Route path="/" element={
+              <Dashboard 
+                user={user} 
+                profile={userProfile} 
+                onLogout={handleLogout}
+                onViewProfile={() => navigate('/profile')}
+                onOpenFile={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.onchange = (e: any) => handleFileChange(e);
+                  input.click();
+                }}
+                onOpenCloudFile={async (file) => {
+                  await handleUploadAndOpen(file);
+                }}
+                onViewAdmin={() => navigate('/admin')}
+              />
+            } />
+            <Route path="/workspace" element={
+              selectedFile && fileId ? (
+                <Workspace file={selectedFile} fileId={fileId} onClose={handleCloseWorkspace} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } />
+            <Route path="/profile" element={
+              <UserProfileView 
+                user={user} 
+                profile={userProfile} 
+                onUpdateProfile={handleUpdateProfile} 
+                onBack={() => navigate('/')} 
+              />
+            } />
+            <Route path="/admin" element={
+              userProfile?.role === 'admin' ? (
+                <AdminPanel 
+                  currentUserUid={user?.uid || ''}
+                  onBack={() => navigate('/')} 
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            } />
+          </Route>
+        </Route>
 
-              <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
-
-              {(view === 'workspace' || view === 'profile' || view === 'admin') && (
-                <button
-                  onClick={() => {
-                    if (view === 'workspace') {
-                      handleCloseWorkspace();
-                    } else {
-                      setView('dashboard');
-                    }
-                  }}
-                  className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
-                >
-                  <Home className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">{t('backToDashboard')}</span>
-                </button>
-              )}
-              {view === 'dashboard' && (
-                <label className="flex items-center px-2 sm:px-4 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-md transition-colors text-xs sm:text-sm font-semibold cursor-pointer border border-blue-500/30">
-                  <FileUp className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">{t('openFile')}</span>
-                  <input type="file" className="hidden" onChange={handleFileChange} />
-                </label>
-              )}
-              
-              <div className="h-6 w-px bg-white/10 mx-1 sm:mx-2"></div>
-              
-              <button
-                onClick={() => setView('profile')}
-                className={`text-xs sm:text-sm hover:text-purple-300 font-semibold transition-colors truncate max-w-[80px] sm:max-w-[150px] cursor-pointer ${view === 'profile' ? 'text-purple-400' : 'text-white/70'}`}
-                title="Xem hồ sơ cá nhân"
-              >
-                {userProfile?.displayName || user.email}
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex items-center px-2 py-1.5 text-xs sm:text-sm font-semibold text-red-400 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </nav>
-
-          <div className="flex-1 flex overflow-hidden z-10 relative">
-              {view === 'dashboard' && (
-                <div 
-                  className="flex-1 flex w-full h-full"
-                >
-                  <Dashboard 
-                    user={user} 
-                    profile={userProfile} 
-                    onLogout={handleLogout}
-                    onViewProfile={() => setView('profile')}
-                    onOpenFile={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.onchange = (e: any) => handleFileChange(e);
-                      input.click();
-                    }}
-                    onOpenCloudFile={async (file) => {
-                      await handleUploadAndOpen(file);
-                    }}
-                    onViewAdmin={() => setView('admin')}
-                  />
-                </div>
-              )}
-              
-              {view === 'admin' && userProfile?.role === 'admin' && (
-                <div 
-                  className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
-                >
-                  <AdminPanel 
-                    currentUserUid={user.uid}
-                    onBack={() => setView('dashboard')} 
-                  />
-                </div>
-              )}
-              
-              {view === 'profile' && (
-                <div 
-                  className="flex-1 flex w-full h-full overflow-y-auto custom-scrollbar"
-                >
-                  <UserProfileView 
-                    user={user} 
-                    profile={userProfile} 
-                    onUpdateProfile={handleUpdateProfile} 
-                    onBack={() => setView('dashboard')} 
-                  />
-                </div>
-              )}
-              
-              {view === 'workspace' && selectedFile && fileId && (
-                <div 
-                  className="flex-1 flex w-full h-full"
-                >
-                  <Workspace file={selectedFile} fileId={fileId} onClose={handleCloseWorkspace} />
-                </div>
-              )}
-            </div>
-
-        </>
-      )}
+        {/* Catch-all Redirect */}
+        <Route path="*" element={<Navigate to={user ? "/" : "/auth"} replace />} />
+      </Routes>
 
       {/* Global uploading screen overlay */}
       {uploading && (
