@@ -107,7 +107,7 @@ export default function MiniHexEditorSheet({
         <>
           {/* Transparent Backdrop backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
+            className="fixed inset-0 bg-black/60  z-40 md:hidden" 
             onClick={onClose}
           />
 
@@ -117,7 +117,7 @@ export default function MiniHexEditorSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 20, stiffness: 220 }}
-            className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-[#0c1222] border-t border-white/10 rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.8)] z-50 p-6 flex flex-col overflow-hidden text-left font-sans select-none pb-8"
+            className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-[#0c1222] border-t border-white/10 rounded-t-[32px]  z-50 p-6 flex flex-col overflow-hidden text-left font-sans select-none pb-8"
           >
             {/* Grab handle indicator */}
             <div className="w-12 h-1 bg-white/15 rounded-full mx-auto mb-4 shrink-0" onClick={onClose} />

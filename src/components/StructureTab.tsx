@@ -187,7 +187,7 @@ export default function StructureTab({
     <div className="space-y-6 text-left pb-10">
       
       {/* Intro section */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 shadow-xl">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5 shadow-xl">
         <h3 className="text-sm font-bold text-white flex items-center">
           <Layers className="w-4.5 h-4.5 text-purple-400 mr-2" />
           Bộ giải mã siêu cấu trúc (Format Structure Viewer)

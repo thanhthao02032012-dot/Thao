@@ -278,7 +278,7 @@ export default function AdminPanel({ onBack, currentUserUid }: AdminPanelProps) 
 
       {/* Editor Modal Sheet */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 ">
           <div className="w-full max-w-md bg-[#121829] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col text-left">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-white/5 bg-black/20">

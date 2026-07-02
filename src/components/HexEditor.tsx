@@ -275,7 +275,14 @@ export default function HexEditor({
     lastScrollTopRef.current = currentScrollTop;
     isScrollingUpRef.current = isScrollingUp;
 
-    setScrollTop(currentScrollTop);
+    // Optimize rendering by only updating state when row boundary crosses
+    const currentStartRow = Math.floor(currentScrollTop / ROW_HEIGHT);
+    const prevStartRow = Math.floor(scrollTop / ROW_HEIGHT);
+    
+    if (currentStartRow !== prevStartRow) {
+      setScrollTop(currentScrollTop);
+    }
+    
     currentScrollTopRef.current = currentScrollTop;
 
     const firstVisibleRow = Math.floor(currentScrollTop / ROW_HEIGHT);
@@ -787,7 +794,7 @@ export default function HexEditor({
       )}
 
       {/* Top Toolbar - Premium Pill layout */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between p-3.5 px-4 border-b border-white/5 shrink-0 bg-[#09090b]/40 backdrop-blur-xl gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between p-3.5 px-4 border-b border-white/5 shrink-0 bg-[#09090b]/40  gap-4">
         <div className="hidden sm:flex items-center space-x-3.5">
           <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
             <Activity className="w-4 h-4 text-purple-400" />
@@ -810,66 +817,56 @@ export default function HexEditor({
               onChange={(e) => setJumpInput(e.target.value)}
               className="w-20 bg-transparent text-white text-xs font-mono outline-none border-none p-0 focus:ring-0"
             />
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+            <button
               type="submit"
               className="p-1 bg-purple-500/20 text-purple-400 hover:bg-purple-600 hover:text-white rounded-full transition-all"
             >
               <Navigation className="w-3 h-3 transform rotate-45" />
-            </motion.button>
+            </button>
           </form>
 
           {/* Undo pill */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
+          <button
             onClick={handleUndo}
             disabled={historyIndex < 0}
             className="flex items-center px-3.5 py-1.5 text-xs font-semibold text-white/75 bg-white/5 border border-white/5 rounded-full hover:bg-white/10 hover:text-white disabled:opacity-20 transition-all shrink-0"
           >
             <Undo className="w-3.5 h-3.5 mr-1 text-purple-400" />
             <span>Undo</span>
-          </motion.button>
+          </button>
 
           {/* Redo pill */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
+          <button
             onClick={handleRedo}
             disabled={historyIndex >= historyLength - 1}
             className="flex items-center px-3.5 py-1.5 text-xs font-semibold text-white/75 bg-white/5 border border-white/5 rounded-full hover:bg-white/10 hover:text-white disabled:opacity-20 transition-all shrink-0"
           >
             <ArrowRight className="w-3.5 h-3.5 mr-1 text-purple-400" />
             <span>Redo</span>
-          </motion.button>
+          </button>
 
           {/* Show/Hide Tools pill */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
+          <button
             onClick={() => setShowToolsPanel(!showToolsPanel)}
             className={`flex items-center px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all shrink-0 ${
               showToolsPanel 
-                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.15)]' 
+                ? 'bg-purple-500/20 text-purple-300 border-purple-500/30 ' 
                 : 'bg-white/5 text-white/75 border-white/5 hover:bg-white/10'
             }`}
           >
             <Sliders className="w-3.5 h-3.5 mr-1" />
             <span>{showToolsPanel ? 'Ẩn công cụ' : 'Hiện công cụ'}</span>
-          </motion.button>
+          </button>
 
           {/* Export File pill */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
+          <button
             onClick={handleDownload}
             disabled={isLoading}
             className="flex items-center px-4 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 transition-all shrink-0 shadow-lg shadow-purple-600/20"
           >
             {isLoading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
             <span>Xuất File</span>
-          </motion.button>
+          </button>
         </div>
       </div>
 
@@ -877,7 +874,7 @@ export default function HexEditor({
       <div className="flex-1 flex flex-col xl:flex-row overflow-hidden relative p-2 lg:p-4 gap-4">
         
         {/* Left Column: Virtual Scroll Grid */}
-        <div className="flex-1 overflow-hidden flex flex-col relative bg-[#0d111a]/80 backdrop-blur-md rounded-2xl border border-white/5">
+        <div className="flex-1 overflow-hidden flex flex-col relative bg-[#0d111a]/80  rounded-2xl border border-white/5">
           {/* Header Legend */}
           <div className="p-4 pb-2 border-b border-white/10 shrink-0">
             <div className="flex text-white/40 font-mono text-[10px] sm:text-xs">
@@ -1036,15 +1033,15 @@ export default function HexEditor({
                               lastClickedOffsetRef.current = offset;
                             }}
                             className={`cursor-pointer px-0.5 rounded transition-all text-center select-all inline-block w-[21px] relative group text-xs font-mono
-                              ${isSelected ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold ring-2 ring-purple-400 z-10 scale-115 shadow-[0_0_12px_rgba(168,85,247,0.65)] animate-pulse' : ''}
-                              ${isPatched && !isSelected ? 'border border-emerald-500/50 text-emerald-300 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.25)] bg-emerald-950/20' : ''}
-                              ${!isSelected && !isPatched && byteVal !== null ? (isZero ? 'text-white/25 hover:text-white/80 hover:bg-white/10 hover:shadow-[0_0_6px_rgba(255,255,255,0.1)]' : 'text-white/85 hover:text-white hover:bg-purple-500/10 hover:shadow-[0_0_8px_rgba(168,85,247,0.3)]') : ''}
+                              ${isSelected ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold ring-2 ring-purple-400 z-10 scale-115  animate-pulse' : ''}
+                              ${isPatched && !isSelected ? 'border border-emerald-500/50 text-emerald-300 font-extrabold  bg-emerald-950/20' : ''}
+                              ${!isSelected && !isPatched && byteVal !== null ? (isZero ? 'text-white/25 hover:text-white/80 hover:bg-white/10 hover:' : 'text-white/85 hover:text-white hover:bg-purple-500/10 hover:') : ''}
                               ${byteVal === null ? 'text-white/10' : ''}
                             `}
                           >
                             {hexStr}
                             {isPatched && !isSelected && (
-                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_4px_rgba(168,85,247,0.8)]" />
+                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-purple-400 " />
                             )}
                           </span>
                         );
@@ -1073,7 +1070,7 @@ export default function HexEditor({
                           <span
                             key={c}
                             className={`w-[10px] text-center rounded transition-all text-xs font-mono
-                              ${isSelected ? 'text-purple-300 font-bold bg-purple-500/30 scale-110 shadow-[0_0_6px_rgba(168,85,247,0.3)]' : ''}
+                              ${isSelected ? 'text-purple-300 font-bold bg-purple-500/30 scale-110 ' : ''}
                               ${isPatched && !isSelected ? 'bg-emerald-950/30 text-emerald-300 font-bold border border-emerald-500/30' : ''}
                               ${!isSelected && !isPatched && byteVal !== null ? (isZero ? 'text-white/15' : 'text-white/55 hover:text-white hover:bg-white/5') : ''}
                               ${byteVal === null ? 'text-white/10' : ''}

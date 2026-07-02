@@ -66,7 +66,7 @@ export default function ContentTab({
 
   return (
     <div className="space-y-5 text-left pb-10">
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 shadow-[0_8px_32px_rgba(11,18,32,0.5)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5  flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center">
             <FileText className="w-4 h-4 text-purple-400 mr-2" />

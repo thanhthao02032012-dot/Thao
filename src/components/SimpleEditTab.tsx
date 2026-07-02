@@ -117,7 +117,7 @@ export default function SimpleEditTab({
     <div className="space-y-6 text-left pb-12">
       
       {/* Intro Card */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-[32px] border border-white/10 p-5 shadow-[0_8px_32px_rgba(11,18,32,0.5)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-[#121829]/65  rounded-[32px] border border-white/10 p-5  flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center">
             <Edit className="w-4.5 h-4.5 text-purple-400 mr-2" />
@@ -468,7 +468,7 @@ export default function SimpleEditTab({
       {/* Validation check sheet dialog */}
       <AnimatePresence>
         {showValidationDialog && (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/85  flex items-center justify-center p-4 z-50">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}

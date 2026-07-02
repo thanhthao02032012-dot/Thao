@@ -65,7 +65,7 @@ export default function ToolsTab({
               }}
               className={`w-full p-4 rounded-3xl border transition-all flex items-start space-x-4 text-left ${
                 isSelected
-                  ? 'bg-gradient-to-tr from-purple-600/10 to-indigo-600/10 border-purple-500/40 text-purple-200 shadow-[0_4px_24px_rgba(168,85,247,0.1)]'
+                  ? 'bg-gradient-to-tr from-purple-600/10 to-indigo-600/10 border-purple-500/40 text-purple-200 '
                   : 'bg-[#121829]/40 border-white/5 text-white/60 hover:bg-[#121829]/60 hover:border-white/10'
               }`}
             >

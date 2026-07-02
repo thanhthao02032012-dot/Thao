@@ -57,7 +57,7 @@ export default function MetadataTab({
 
   return (
     <div className="space-y-6 text-left pb-10">
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 shadow-[0_8px_32px_rgba(11,18,32,0.5)]">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5 ">
         <h3 className="text-sm font-bold text-white flex items-center">
           <Info className="w-4 h-4 text-purple-400 mr-2" />
           Bảng siêu dữ liệu nâng cao (Metadata Sheet)

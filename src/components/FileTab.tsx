@@ -76,7 +76,7 @@ export default function FileTab({ file, virtualFileSize, patches }: FileTabProps
   return (
     <div className="space-y-6">
       {/* File overview card */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-6 relative overflow-hidden shadow-[0_8px_32px_rgba(11,18,32,0.5)]">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-6 relative overflow-hidden ">
         <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 blur-[50px] rounded-full pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-4">
@@ -129,7 +129,7 @@ export default function FileTab({ file, virtualFileSize, patches }: FileTabProps
       </div>
 
       {/* Checksums section */}
-      <div className="bg-[#121829]/50 backdrop-blur-xl rounded-3xl border border-white/5 p-5 shadow-2xl space-y-4">
+      <div className="bg-[#121829]/50  rounded-3xl border border-white/5 p-5 shadow-2xl space-y-4">
         <h4 className="text-xs font-bold text-white/70 uppercase tracking-widest flex items-center">
           <Hash className="w-4 h-4 text-indigo-400 mr-2" />
           Mã Băm & Bảo Mật (Checksums)
@@ -208,7 +208,7 @@ export default function FileTab({ file, virtualFileSize, patches }: FileTabProps
 
       {/* Entropy Visualization & Help Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-[#121829]/50 backdrop-blur-xl rounded-3xl border border-white/5 p-5 shadow-2xl flex flex-col justify-between">
+        <div className="bg-[#121829]/50  rounded-3xl border border-white/5 p-5 shadow-2xl flex flex-col justify-between">
           <div>
             <h4 className="text-xs font-bold text-white/70 uppercase tracking-widest flex items-center mb-3">
               <Activity className="w-4 h-4 text-emerald-400 mr-2" />
@@ -238,7 +238,7 @@ export default function FileTab({ file, virtualFileSize, patches }: FileTabProps
         </div>
 
         {/* Local Streaming Note Box */}
-        <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 backdrop-blur-xl rounded-3xl border border-indigo-500/20 p-5 shadow-2xl flex flex-col justify-between text-left">
+        <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10  rounded-3xl border border-indigo-500/20 p-5 shadow-2xl flex flex-col justify-between text-left">
           <div>
             <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center mb-3">
               <ShieldCheck className="w-4 h-4 text-indigo-400 mr-2 animate-pulse" />

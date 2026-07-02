@@ -63,7 +63,7 @@ export default function DevPerformanceBoard() {
     return (
       <button 
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-16 right-4 md:bottom-20 md:right-8 bg-[#121829]/90 backdrop-blur-xl border border-white/10 p-2.5 rounded-full shadow-2xl z-50 text-sky-400 hover:text-white hover:bg-sky-500/20 transition-all cursor-pointer"
+        className="fixed bottom-16 right-4 md:bottom-20 md:right-8 bg-[#121829]/90  border border-white/10 p-2.5 rounded-full shadow-2xl z-50 text-sky-400 hover:text-white hover:bg-sky-500/20 transition-all cursor-pointer"
         title="Developer Performance Board"
       >
         <Activity className="w-5 h-5" />
@@ -72,7 +72,7 @@ export default function DevPerformanceBoard() {
   }
 
   return (
-    <div className="fixed bottom-16 right-4 md:bottom-20 md:right-8 bg-[#0b0e17]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-50 w-64 md:w-80 flex flex-col overflow-hidden text-left font-mono">
+    <div className="fixed bottom-16 right-4 md:bottom-20 md:right-8 bg-[#0b0e17]/95  border border-white/10 rounded-2xl shadow-2xl z-50 w-64 md:w-80 flex flex-col overflow-hidden text-left font-mono">
       <div className="flex justify-between items-center bg-white/5 px-4 py-3 border-b border-white/5 cursor-pointer" onClick={() => setIsOpen(false)}>
         <div className="flex items-center space-x-2">
           <Activity className="w-4 h-4 text-sky-400" />

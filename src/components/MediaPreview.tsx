@@ -139,7 +139,7 @@ export default function MediaPreview({ file, fileId = '', patches, virtualFileSi
     <div className="space-y-6 text-left">
       
       {/* Real-time Stream Section */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 overflow-hidden shadow-xl">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 overflow-hidden shadow-xl">
         <div className="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center">
           <div className="flex items-center space-x-2">
             {isVideo && <Film className="w-4 h-4 text-purple-400" />}
@@ -212,7 +212,7 @@ export default function MediaPreview({ file, fileId = '', patches, virtualFileSi
 
       {/* Media Timeline (if audio or video detected) */}
       {(isAudio || isVideo || !isImage) && (
-        <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 shadow-xl space-y-4">
+        <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5 shadow-xl space-y-4">
           <div>
             <span className="text-[9px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
               Thanh phát thanh & hình ảnh
@@ -299,7 +299,7 @@ export default function MediaPreview({ file, fileId = '', patches, virtualFileSi
       )}
 
       {/* Image Resources Gallery */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 shadow-xl space-y-4">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5 shadow-xl space-y-4">
         <div className="flex justify-between items-center">
           <div>
             <span className="text-[9px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">

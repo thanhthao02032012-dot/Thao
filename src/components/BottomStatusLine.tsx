@@ -58,7 +58,7 @@ export default function BottomStatusLine({
   };
 
   return (
-    <div className="bg-[#0b0e17]/85 backdrop-blur-xl border-t border-white/5 py-2.5 px-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between text-[11px] text-white/50 font-mono select-none shrink-0 z-30">
+    <div className="bg-[#0b0e17]/85  border-t border-white/5 py-2.5 px-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between text-[11px] text-white/50 font-mono select-none shrink-0 z-30">
       
       {/* Saving progress bar mode */}
       {isSaving ? (

@@ -127,6 +127,11 @@ export default function StringsTab({ file, virtualFileSize, onJumpToOffset, onPa
         {strings.length > 0 ? (
           <Virtuoso
             data={filteredVisible}
+            endReached={() => {
+              if (strings.length > visibleLimit) {
+                setVisibleLimit(prev => prev + 1000);
+              }
+            }}
             className="h-full scrollbar-thin scrollbar-thumb-white/10"
             itemContent={(index, s) => (
               <div 

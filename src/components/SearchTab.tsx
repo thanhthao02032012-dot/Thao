@@ -23,6 +23,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
   const [progressPercent, setProgressPercent] = useState(0);
   const [scannedBytes, setScannedBytes] = useState(0);
   const [results, setResults] = useState<number[]>([]);
+  const [visibleLimit, setVisibleLimit] = useState(1000);
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [history, setHistory] = useState<string[]>(() => {
     try {
@@ -109,18 +110,20 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
 
     if (navigator.vibrate) navigator.vibrate(15);
 
+    const maxMatches = 10000000; // 10 million limit
     const CHUNK_SIZE = 512 * 1024; // 512KB slice size for fast & non-blocking execution
     const overlap = pattern.length - 1;
     let offset = 0;
     const foundOffsets: number[] = [];
-    const maxMatches = 250;
-
+    let lastUiUpdateTime = Date.now();
+    
     // Incremental generator / loop yielding thread back to React
     const searchStep = async () => {
       if (abortFlagRef.current || offset >= virtualFileSize || foundOffsets.length >= maxMatches) {
         setIsSearching(false);
         setProgressPercent(100);
         setScannedBytes(virtualFileSize);
+        setResults([...foundOffsets]); // Final update
         if (foundOffsets.length === 0) {
           toast('Không tìm thấy kết quả phù hợp', 'info');
         } else {
@@ -135,6 +138,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
       const buffer = await readAndPatchChunk(file, offset, bytesToRead, patches, virtualFileSize);
 
       // Perform fast sub-buffer matching
+      let matchCountThisChunk = 0;
       for (let i = 0; i <= buffer.length - pattern.length; i++) {
         let match = true;
         for (let j = 0; j < pattern.length; j++) {
@@ -145,8 +149,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
         }
         if (match) {
           foundOffsets.push(offset + i);
-          // Batch updates to avoid React component lag
-          setResults([...foundOffsets]);
+          matchCountThisChunk++;
           if (foundOffsets.length >= maxMatches) {
             break;
           }
@@ -159,6 +162,13 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
       offset = nextOffset;
       setScannedBytes(Math.min(offset, virtualFileSize));
       setProgressPercent(Math.floor((Math.min(offset, virtualFileSize) / virtualFileSize) * 100));
+
+      // Batch updates to avoid React component lag and GC pressure
+      const now = Date.now();
+      if (now - lastUiUpdateTime > 100) { // Update UI at most 10 times a second
+        setResults([...foundOffsets]);
+        lastUiUpdateTime = now;
+      }
 
       // Yield execution cleanly to prevent browser frame drop
       requestAnimationFrame(() => {
@@ -180,7 +190,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
   return (
     <div className="space-y-6 text-left">
       {/* Search Console Header and input controls */}
-      <div className="bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 md:p-6 shadow-[0_8px_32px_rgba(11,18,32,0.5)] space-y-4">
+      <div className="bg-[#121829]/65  rounded-3xl border border-white/10 p-5 md:p-6  space-y-4">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center">
             <Search className="w-4 h-4 text-purple-400 mr-2" />
@@ -266,7 +276,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
             </div>
             <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/10 relative">
               <div 
-                className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 rounded-full transition-all duration-100 shadow-[0_0_8px_rgba(168,85,247,0.4)]"
+                className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 rounded-full transition-all duration-100 "
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -275,7 +285,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
       </div>
 
       {/* Results grid container */}
-      <div className="bg-[#121829]/40 backdrop-blur-xl rounded-3xl border border-white/5 p-5 shadow-2xl min-h-[300px] flex flex-col">
+      <div className="bg-[#121829]/40  rounded-3xl border border-white/5 p-5 shadow-2xl min-h-[300px] flex flex-col">
         <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
           <span className="text-xs font-bold text-white/50 uppercase tracking-widest">
             Danh sách kết quả ({results.length})
@@ -293,12 +303,17 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
             <span className="text-xs">Chưa có kết quả tìm kiếm nào.</span>
           </div>
         ) : (
-          <div className="max-h-[400px]">
+          <div className="max-h-[400px] flex flex-col space-y-4">
             <VirtuosoGrid
               style={{ height: '400px' }}
-              totalCount={results.length}
+              totalCount={Math.min(results.length, visibleLimit)}
               listClassName="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
               itemClassName="p-1"
+              endReached={() => {
+                if (results.length > visibleLimit) {
+                  setVisibleLimit(prev => prev + 1000);
+                }
+              }}
               itemContent={(idx) => {
                 const offset = results[idx];
                 return (
@@ -311,7 +326,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
                     }}
                     className={`w-full p-3 rounded-2xl text-left border transition-all flex flex-col justify-between ${
                       activeResultIndex === idx 
-                        ? 'bg-purple-600/20 border-purple-500 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.25)]' 
+                        ? 'bg-purple-600/20 border-purple-500 text-purple-200 ' 
                         : 'bg-white/[0.02] border-white/5 text-white/75 hover:bg-white/[0.04] hover:border-white/10'
                     }`}
                   >
@@ -325,6 +340,17 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
                 );
               }}
             />
+            {results.length > visibleLimit && (
+              <div className="flex justify-center pt-2">
+                <button
+                  onClick={() => setVisibleLimit(prev => prev + 1000)}
+                  className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-bold uppercase text-white/60 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Tải thêm kết quả ({visibleLimit} / {results.length})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

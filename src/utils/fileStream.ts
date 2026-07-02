@@ -14,9 +14,14 @@ export async function readAndPatchChunk(
   const fileBytesCount = Math.max(0, Math.min(actualLength, file.size - offset));
 
   if (fileBytesCount > 0) {
-    const slice = file.slice(offset, offset + fileBytesCount);
-    const arrayBuffer = await slice.arrayBuffer();
-    bytes.set(new Uint8Array(arrayBuffer));
+    try {
+      const slice = file.slice(offset, offset + fileBytesCount);
+      const arrayBuffer = await slice.arrayBuffer();
+      bytes.set(new Uint8Array(arrayBuffer));
+    } catch (error) {
+      console.error("Error reading file chunk:", error);
+      // Return zeroed bytes for unreadable sections
+    }
   }
 
   // Apply any active patches (both inline modifications and signature additions)

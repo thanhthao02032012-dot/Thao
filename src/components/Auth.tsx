@@ -309,14 +309,14 @@ export default function Auth({ onSuccess }: { onSuccess: () => void }) {
         </div>
 
         {error && (
-          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start text-red-400 text-sm backdrop-blur-sm">
+          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start text-red-400 text-sm ">
             <ShieldAlert className="w-5 h-5 mr-2 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-6 p-3 bg-green-500/10 border border-green-500/30 rounded-xl flex items-start text-green-400 text-sm backdrop-blur-sm">
+          <div className="mb-6 p-3 bg-green-500/10 border border-green-500/30 rounded-xl flex items-start text-green-400 text-sm ">
             <span>{successMsg}</span>
           </div>
         )}

@@ -14,6 +14,7 @@ import { storeFile, getFile } from './utils/db';
 import { useUI } from './components/UIProvider';
 import { useLanguage } from './components/LanguageProvider';
 import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import UserProfileView from './components/UserProfile';
@@ -438,7 +439,9 @@ export default function App() {
               )}
 
               <div className={`flex-1 flex overflow-hidden z-10 relative ${isMobile ? 'pt-[56px] pb-[64px]' : ''}`}>
-                <Outlet />
+                <ErrorBoundary>
+                  <Outlet />
+                </ErrorBoundary>
               </div>
 
               {/* Mobile Bottom Navigation */}

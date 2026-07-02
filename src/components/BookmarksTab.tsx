@@ -30,11 +30,11 @@ export default function BookmarksTab({ bookmarks, setBookmarks, onJumpToOffset, 
   const [color, setColor] = useState<'purple' | 'emerald' | 'blue' | 'yellow' | 'pink'>('purple');
 
   const colors = {
-    purple: { name: 'Tím', bg: 'bg-purple-500/10 border-purple-500/20 text-purple-400', hex: '#A855F7', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.3)]' },
-    emerald: { name: 'Xanh lá', bg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', hex: '#10B981', glow: 'shadow-[0_0_10px_rgba(16,185,129,0.3)]' },
-    blue: { name: 'Xanh dương', bg: 'bg-blue-500/10 border-blue-500/20 text-blue-400', hex: '#3B82F6', glow: 'shadow-[0_0_10px_rgba(59,130,246,0.3)]' },
-    yellow: { name: 'Vàng', bg: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400', hex: '#EAB308', glow: 'shadow-[0_0_10px_rgba(234,179,8,0.3)]' },
-    pink: { name: 'Hồng', bg: 'bg-pink-500/10 border-pink-500/20 text-pink-400', hex: '#EC4899', glow: 'shadow-[0_0_10px_rgba(236,72,153,0.3)]' }
+    purple: { name: 'Tím', bg: 'bg-purple-500/10 border-purple-500/20 text-purple-400', hex: '#A855F7', glow: '' },
+    emerald: { name: 'Xanh lá', bg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', hex: '#10B981', glow: '' },
+    blue: { name: 'Xanh dương', bg: 'bg-blue-500/10 border-blue-500/20 text-blue-400', hex: '#3B82F6', glow: '' },
+    yellow: { name: 'Vàng', bg: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400', hex: '#EAB308', glow: '' },
+    pink: { name: 'Hồng', bg: 'bg-pink-500/10 border-pink-500/20 text-pink-400', hex: '#EC4899', glow: '' }
   };
 
   const handleAddBookmark = () => {
@@ -87,7 +87,7 @@ export default function BookmarksTab({ bookmarks, setBookmarks, onJumpToOffset, 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-left">
       {/* Create Bookmark form */}
-      <div className="lg:col-span-5 bg-[#121829]/65 backdrop-blur-2xl rounded-3xl border border-white/10 p-5 md:p-6 shadow-[0_8px_32px_rgba(11,18,32,0.5)] h-fit space-y-4">
+      <div className="lg:col-span-5 bg-[#121829]/65  rounded-3xl border border-white/10 p-5 md:p-6  h-fit space-y-4">
         <div>
           <h3 className="text-sm font-bold text-white flex items-center">
             <Plus className="w-4 h-4 text-purple-400 mr-2" />
@@ -161,7 +161,7 @@ export default function BookmarksTab({ bookmarks, setBookmarks, onJumpToOffset, 
       </div>
 
       {/* Bookmark Cards list */}
-      <div className="lg:col-span-7 bg-[#121829]/40 backdrop-blur-xl rounded-3xl border border-white/5 p-5 shadow-2xl min-h-[350px] flex flex-col justify-between">
+      <div className="lg:col-span-7 bg-[#121829]/40  rounded-3xl border border-white/5 p-5 shadow-2xl min-h-[350px] flex flex-col justify-between">
         <div>
           <span className="text-xs font-bold text-white/50 uppercase tracking-widest block mb-4 border-b border-white/5 pb-3">
             Bookmarks đã lưu ({bookmarks.length})
