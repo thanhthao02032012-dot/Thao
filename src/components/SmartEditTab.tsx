@@ -12,10 +12,43 @@ interface SmartEditTabProps {
   file: File;
   virtualFileSize: number;
   analysis: AnalysisResult | null;
+  patches?: Map<number, number>;
   onApplyPatch: (offset: number, value: number) => void;
+  onApplyPatches?: (patches: { offset: number, value: number }[]) => void;
   onNavigateTab?: (tab: string) => void;
   onJumpToOffset?: (offset: number) => void;
 }
+
+// Utility to overlay active patches onto original text in real-time
+const getPatchedString = (offset: number, size: number, originalText: string, patches: Map<number, number>): string => {
+  if (size <= 0) return originalText;
+  let hasPatch = false;
+  for (let i = 0; i < size; i++) {
+    if (patches.has(offset + i)) {
+      hasPatch = true;
+      break;
+    }
+  }
+  if (!hasPatch) return originalText;
+
+  const bytes = new Uint8Array(size);
+  const encoder = new TextEncoder();
+  const origBytes = encoder.encode(originalText);
+  for (let i = 0; i < size; i++) {
+    if (patches.has(offset + i)) {
+      bytes[i] = patches.get(offset + i)!;
+    } else if (i < origBytes.length) {
+      bytes[i] = origBytes[i];
+    } else {
+      bytes[i] = 0;
+    }
+  }
+  try {
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    return originalText;
+  }
+};
 
 // Helper Component for Lazy Resource Preview
 function ResourcePreview({ item, file }: { item: any, file: File }) {
@@ -249,7 +282,7 @@ function ISOTreeView({ analysis }: { analysis: AnalysisResult }) {
   );
 }
 
-export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyPatch, onNavigateTab, onJumpToOffset }: SmartEditTabProps) {
+export default function SmartEditTab({ file, virtualFileSize, analysis, patches, onApplyPatch, onApplyPatches, onNavigateTab, onJumpToOffset }: SmartEditTabProps) {
   const { toast } = useUI();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -266,8 +299,16 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
       try {
         const arrayBuffer = reader.result as ArrayBuffer;
         const bytes = new Uint8Array(arrayBuffer);
+        const patchList: { offset: number, value: number }[] = [];
         for (let i = 0; i < bytes.length; i++) {
-          onApplyPatch(item.offset + i, bytes[i]);
+          patchList.push({ offset: item.offset + i, value: bytes[i] });
+        }
+        if (onApplyPatches) {
+          onApplyPatches(patchList);
+        } else {
+          for (let i = 0; i < bytes.length; i++) {
+            onApplyPatch(item.offset + i, bytes[i]);
+          }
         }
         toast(`✓ Đã thay thế [${item.name}] bằng tệp mới (${bytes.length} bytes) thành công!`, 'success');
       } catch (err) {
@@ -287,8 +328,16 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
     try {
       const encoder = new TextEncoder();
       const bytes = encoder.encode(text);
+      const patchList: { offset: number, value: number }[] = [];
       for (let i = 0; i < bytes.length; i++) {
-        onApplyPatch(editingItem.offset + i, bytes[i]);
+        patchList.push({ offset: editingItem.offset + i, value: bytes[i] });
+      }
+      if (onApplyPatches) {
+        onApplyPatches(patchList);
+      } else {
+        for (let i = 0; i < bytes.length; i++) {
+          onApplyPatch(editingItem.offset + i, bytes[i]);
+        }
       }
       toast(`✓ Đã lưu thay đổi cho [${editingItem.name}] thành công! (${bytes.length} bytes)`, 'success');
       setEditingItem(null);
@@ -335,18 +384,24 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
     if (!analysis) return { allItems: [], filteredItems: [] };
     
     let items: any[] = [];
+    const patchesMap = patches || new Map<number, number>();
     
     // 1. Map Embedded items
     if (analysis.embeddedItems) {
-      items = items.concat(analysis.embeddedItems.map(m => ({
-        id: m.id,
-        name: m.name,
-        type: m.type,
-        offset: m.offset,
-        size: m.size,
-        details: m.details,
-        category: 'embedded'
-      })));
+      items = items.concat(analysis.embeddedItems.map(m => {
+        const offset = m.offset;
+        const size = m.size;
+        const patchedDetails = getPatchedString(offset, size, m.details || '', patchesMap);
+        return {
+          id: m.id,
+          name: m.name,
+          type: m.type,
+          offset: offset,
+          size: size,
+          details: patchedDetails,
+          category: 'embedded'
+        };
+      }));
     }
 
     // 2. Map Metadata
@@ -357,13 +412,17 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
         if (m.key.toLowerCase().includes('gps') || m.key.toLowerCase().includes('location')) type = 'gps';
         if (m.key.toLowerCase().includes('camera') || m.key.toLowerCase().includes('lens')) type = 'camera';
         
+        const offset = m.offset || 0;
+        const size = m.value?.length || 0;
+        const patchedDetails = getPatchedString(offset, size, m.value || '', patchesMap);
+
         return {
           id: `meta_${idx}`,
           name: m.label,
           type: type,
-          offset: m.offset || 0,
-          size: m.value?.length || 0,
-          details: m.value,
+          offset: offset,
+          size: size,
+          details: patchedDetails,
           category: 'metadata'
         };
       }));
@@ -371,15 +430,21 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
 
     // 3. Map All Strings
     if (analysis.strings) {
-      items = items.concat(analysis.strings.map((s, idx) => ({
-        id: `str_${idx}`,
-        name: s.type === 'general' ? `String at 0x${s.offset.toString(16).toUpperCase()}` : `${s.type.toUpperCase()} String`,
-        type: s.type === 'url' ? 'url' : s.type === 'email' ? 'email' : 'text',
-        offset: s.offset,
-        size: s.value.length,
-        details: s.value,
-        category: 'strings'
-      })));
+      items = items.concat(analysis.strings.map((s, idx) => {
+        const offset = s.offset;
+        const size = s.value.length;
+        const patchedDetails = getPatchedString(offset, size, s.value, patchesMap);
+
+        return {
+          id: `str_${idx}`,
+          name: s.type === 'general' ? `String at 0x${s.offset.toString(16).toUpperCase()}` : `${s.type.toUpperCase()} String`,
+          type: s.type === 'url' ? 'url' : s.type === 'email' ? 'email' : 'text',
+          offset: offset,
+          size: size,
+          details: patchedDetails,
+          category: 'strings'
+        };
+      }));
     }
 
     const all = items;
@@ -407,7 +472,7 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
     }
 
     return { allItems: all, filteredItems: filtered };
-  }, [analysis, searchQuery, activeCategory]);
+  }, [analysis, searchQuery, activeCategory, patches]);
 
   const visibleItems = useMemo(() => {
     return filteredItems.slice(0, visibleLimit);
@@ -484,6 +549,20 @@ export default function SmartEditTab({ file, virtualFileSize, analysis, onApplyP
         {analysis && analysis.fileType.includes('ISO') && (
           <div className="mb-6">
             <ISOTreeView analysis={analysis} />
+          </div>
+        )}
+
+        {/* Raw Scan Mode Warning Banner */}
+        {analysis && analysis.isRawScanMode && (
+          <div className="mb-6 p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-start space-x-3.5">
+            <AlertCircle className="w-5.5 h-5.5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-amber-200 uppercase tracking-wide">⚠️ Chế độ Quét Thô (Raw Scan Mode Enabled)</h4>
+              <p className="text-xs text-amber-300/80 leading-relaxed">
+                Phân hệ phân tích cấu trúc nâng cao không khả dụng cho tệp tin này hoặc gặp lỗi cấu trúc: <span className="font-mono text-[11px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{analysis.rawScanWarning || 'Không xác định'}</span>.
+                Hệ thống đã tự động chuyển sang chế độ Quét thô (Raw Scan Mode) để dò tìm chữ ký nhị phân, cấu trúc vùng nhớ, entropy phân đoạn, trích xuất Strings và rà soát luật YARA.
+              </p>
+            </div>
           </div>
         )}
 

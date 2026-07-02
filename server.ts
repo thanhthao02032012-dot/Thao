@@ -4,6 +4,23 @@ import fs from 'fs';
 import os from 'os';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
+
+// Lazy-initialized Gemini Client helper
+const getGeminiClient = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is required for AI Summary');
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+};
 
 const app = express();
 const PORT = 3000;
@@ -1222,6 +1239,36 @@ app.post('/api/file/close', (req, res) => {
     }
   } else {
     res.json({ success: true, message: 'File session already cleaned up' });
+  }
+});
+
+// API Endpoint: YARA AI Profile Summary
+app.post('/api/yara/ai-summary', async (req, res) => {
+  const { filename, filesize, ruleMatches } = req.body;
+
+  try {
+    const aiClient = getGeminiClient();
+    const prompt = `Bạn là chuyên gia phân tích nhị phân và mã độc (Binary Intelligence Analyst) thuộc hệ thống phân tích cao cấp WebHexed.
+Hãy đưa ra một bản tóm tắt phân tích thông minh bằng Tiếng Việt (khoảng 3-4 câu ngắn gọn, súc tích và có tính chuyên môn cực cao) dựa trên các thông tin tệp tin được quét:
+- Tên tệp tin: ${filename}
+- Kích thước: ${filesize} bytes
+- Kết quả quét trùng khớp tập luật YARA (YARA Rule matches): ${JSON.stringify(ruleMatches)}
+
+Yêu cầu tóm tắt phân tích:
+1. Xác định tệp tin này thuộc định dạng, công nghệ hoặc cấu trúc gì rõ ràng nhất (ví dụ: UnityFS Game Asset Bundle, Android Package APK, PE Executable, PDF, v.v.).
+2. Giải thích ý nghĩa nghiệp vụ của các luật YARA khớp (ví dụ: khớp chữ ký nhị phân nén LZ4/Zlib, phát hiện các đoạn tài nguyên hoặc các hàm webshell/mã độc nguy hiểm).
+3. Kết luận nhanh về độ tin cậy và mức độ an toàn (Sạch / Nghi vấn / Nguy hiểm).
+4. Viết súc tích, phong cách kỹ thuật sắc sảo, không lan man, không rườm rà sáo rỗng. Không có lời chào hay ký tên.`;
+
+    const response = await aiClient.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+    });
+
+    res.json({ summary: response.text });
+  } catch (err: any) {
+    console.error('YARA Gemini summary error:', err);
+    res.status(500).json({ error: err.message || 'Không thể tạo tóm tắt AI' });
   }
 });
 

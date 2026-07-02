@@ -55,6 +55,8 @@ export interface AnalysisResult {
     size: number;
     details?: string;
   }>;
+  isRawScanMode?: boolean;
+  rawScanWarning?: string;
 }
 
 /**
@@ -117,44 +119,35 @@ export function startAnalysisWorker(
   worker.onmessage = async (e) => {
     const data = e.data;
     
-    if (data.type === 'PROGRESS') {
+    if (data.type === 'STAGE_START') {
+      onProgress(0, data.stageName, {
+        stageId: data.stageId,
+        stageName: data.stageName,
+        stageEvent: 'start'
+      });
+    } else if (data.type === 'STAGE_UPDATE') {
+      onProgress(data.progress, data.statusText, {
+        stageId: data.stageId,
+        stageEvent: 'update',
+        statusText: data.statusText,
+        extraMetrics: data.extraMetrics
+      });
+    } else if (data.type === 'STAGE_COMPLETE') {
+      onProgress(100, `Hoàn thành ${data.stageId}`, {
+        stageId: data.stageId,
+        stageEvent: 'complete',
+        stageStatus: data.status,
+        stageError: data.error,
+        stageResult: data.result
+      });
+    } else if (data.type === 'PROGRESS') {
       onProgress(data.progress, data.status, {
         chunk: data.chunk,
         totalChunks: data.totalChunks,
         speed: data.speed
       });
     } else if (data.type === 'DONE') {
-      const parsedResult = await runSmartParser(file, data.headerBytes);
-      
-      const finalResult: AnalysisResult = {
-        fileType: parsedResult.formatName,
-        isText: parsedResult.isText,
-        textContent: '',
-        detectedItems: {
-          ...parsedResult.detectedFeatures,
-          strings: true,
-          metadata: true,
-          dates: true,
-          urls: true,
-          versions: true,
-          header: true,
-          footer: true,
-          dataBlocks: true,
-          databases: false,
-          certificates: false,
-          unknownSections: false
-        },
-        metadata: [
-          { key: 'name', label: 'Tên tệp (Name)', value: file.name, editable: false, offset: 0 },
-          { key: 'size', label: 'Dung lượng (Size)', value: `${(file.size / (1024 * 1024)).toFixed(3)} MB`, editable: false, offset: 0 },
-          ...parsedResult.metadata.map(m => ({ ...m, offset: 0 }))
-        ],
-        structure: parsedResult.structures,
-        strings: data.strings,
-        embeddedItems: parsedResult.embeddedItems
-      };
-      
-      onResult(finalResult);
+      onResult(data.result);
       worker.terminate();
     } else if (data.type === 'ERROR') {
       onError(data.error);
@@ -264,7 +257,9 @@ export async function performDeepAnalysis(
     strings: list,
     metadata: metadataList,
     structure: structureList,
-    embeddedItems: parsedResult.embeddedItems || []
+    embeddedItems: parsedResult.embeddedItems || [],
+    isRawScanMode: parsedResult.isRawScanMode,
+    rawScanWarning: parsedResult.rawScanWarning
   });
 
   // If Lite Mode, we return IMMEDIATELY with the Header result!

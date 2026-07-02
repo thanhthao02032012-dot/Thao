@@ -28,6 +28,8 @@ interface HexEditorProps {
   onApplied?: () => void;
   initialActiveToolTab?: 'search' | 'structures' | 'history' | 'checksums';
   showToolsPanelProp?: boolean;
+  onSelectOffset?: (offset: number) => void;
+  perfMode?: string;
 }
 
 interface HistoryEntry {
@@ -52,7 +54,9 @@ export default function HexEditor({
   setVirtualFileSize,
   onApplied,
   initialActiveToolTab,
-  showToolsPanelProp
+  showToolsPanelProp,
+  onSelectOffset,
+  perfMode
 }: HexEditorProps) {
   const { toast, confirm } = useUI();
   // Main view and scroll states
@@ -444,6 +448,7 @@ export default function HexEditor({
     }
     setScrollTop(targetScrollTop);
     setSelectedOffset(offset);
+    onSelectOffset?.(offset);
 
     const targetStartRow = Math.max(0, Math.min(totalRows - 100, targetRow - 40));
     fetchWindowData(targetStartRow).then(() => {
@@ -1016,6 +1021,7 @@ export default function HexEditor({
                             }}
                             onClick={() => {
                               if (byteVal === null) return;
+                              onSelectOffset?.(offset);
                               const now = Date.now();
                               const gap = now - lastClickTimeRef.current;
                               if (gap < 250 && lastClickedOffsetRef.current === offset) {

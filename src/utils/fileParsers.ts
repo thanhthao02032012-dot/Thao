@@ -37,6 +37,8 @@ export interface ParserResult {
     tables: boolean;
     resources: boolean;
   };
+  isRawScanMode?: boolean;
+  rawScanWarning?: string;
 }
 
 export interface FileParserPlugin {
@@ -666,22 +668,164 @@ export async function getGenericBinaryParser(file: File, size: number): Promise<
   };
 }
 
+interface DetectedPattern {
+  name: string;
+  ext: string;
+  offset: number;
+  magicHex: string;
+  description: string;
+  type: 'image' | 'audio' | 'video' | 'text' | 'document' | 'structure' | 'database' | 'compressed';
+}
+
+export function scanForSignatures(bytes: Uint8Array): DetectedPattern[] {
+  const patterns: { name: string; ext: string; magic: number[]; desc: string; type: DetectedPattern['type'] }[] = [
+    { name: 'PNG Image', ext: 'png', magic: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], desc: 'Portable Network Graphics image signature', type: 'image' },
+    { name: 'JPEG Image', ext: 'jpg', magic: [0xFF, 0xD8, 0xFF], desc: 'Joint Photographic Experts Group image SOI marker', type: 'image' },
+    { name: 'PDF Document', ext: 'pdf', magic: [0x25, 0x50, 0x44, 0x46], desc: 'Adobe Portable Document Format header', type: 'document' },
+    { name: 'ZIP Archive', ext: 'zip', magic: [0x50, 0x4B, 0x03, 0x04], desc: 'ZIP compressed file archive local file header', type: 'compressed' },
+    { name: 'ELF Executable', ext: 'elf', magic: [0x7F, 0x45, 0x4C, 0x46], desc: 'Linux Executable and Linkable Format', type: 'structure' },
+    { name: 'SQLite Database', ext: 'sqlite', magic: [0x53, 0x51, 0x4C, 0x69, 0x74, 0x65], desc: 'SQLite database signature', type: 'database' },
+    { name: 'Windows MZ Executable', ext: 'exe', magic: [0x4D, 0x5A], desc: 'MZ DOS Stub Header / PE Executable', type: 'structure' },
+    { name: 'GIF Image', ext: 'gif', magic: [0x47, 0x49, 0x46, 0x38], desc: 'Graphics Interchange Format image', type: 'image' },
+    { name: 'RAR Archive', ext: 'rar', magic: [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07], desc: 'RAR Compressed Archive', type: 'compressed' },
+    { name: '7z Archive', ext: '7z', magic: [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C], desc: '7-Zip Compressed Archive', type: 'compressed' },
+    { name: 'Java Class', ext: 'class', magic: [0xCA, 0xFE, 0xBA, 0xBE], desc: 'Java Bytecode Class', type: 'structure' },
+    { name: 'MP3 Audio (ID3v2)', ext: 'mp3', magic: [0x49, 0x44, 0x33], desc: 'MP3 Audio File ID3 Tag', type: 'audio' }
+  ];
+
+  const results: DetectedPattern[] = [];
+  
+  for (const pat of patterns) {
+    const len = pat.magic.length;
+    for (let i = 0; i <= bytes.length - len; i++) {
+      let match = true;
+      for (let j = 0; j < len; j++) {
+        if (bytes[i + j] !== pat.magic[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        results.push({
+          name: pat.name,
+          ext: pat.ext,
+          offset: i,
+          magicHex: pat.magic.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+          description: pat.desc,
+          type: pat.type
+        });
+      }
+    }
+  }
+  
+  return results;
+}
+
+export async function runRawScanMode(file: File, header: Uint8Array, warningMessage: string): Promise<ParserResult> {
+  const size = file.size;
+  const detectedSignatures = scanForSignatures(header);
+  
+  const structures: ParsedStructure[] = [
+    { 
+      name: 'Vùng Đầu Tệp Thô (Raw Header Block)', 
+      start: 0, 
+      end: Math.min(size, 64), 
+      type: 'header', 
+      description: 'Chứa thông tin nhận diện sơ bộ của chế độ Quét thô (Raw Scan Mode).' 
+    }
+  ];
+
+  if (size > 128) {
+    structures.push({
+      name: 'Thân Khối Dữ Liệu Thô (Raw Payload Block)',
+      start: Math.min(size, 64),
+      end: Math.max(64, size - 128),
+      type: 'data',
+      description: 'Dữ liệu nhị phân quét thô bằng các chữ ký tự động.'
+    });
+    structures.push({
+      name: 'Vùng Cuối Tệp Thô (Raw Footer Block)',
+      start: Math.max(64, size - 128),
+      end: size,
+      type: 'footer',
+      description: 'Phần kết thúc của tệp phân tích thô.'
+    });
+  }
+
+  // Add detected signatures into common structures!
+  detectedSignatures.forEach((sig, idx) => {
+    structures.push({
+      name: `Chữ ký ${sig.name} (Signature)`,
+      start: sig.offset,
+      end: sig.offset + sig.magicHex.split(' ').length,
+      type: 'marker',
+      description: `${sig.description} phát hiện ở địa chỉ byte offset 0x${sig.offset.toString(16).toUpperCase()}`
+    });
+  });
+
+  const embeddedItems: ParsedItem[] = detectedSignatures.map((sig, idx) => ({
+    id: `raw_embed_${sig.ext}_${idx}`,
+    name: `Embedded ${sig.name}`,
+    type: sig.type,
+    offset: sig.offset,
+    size: Math.min(size - sig.offset, 4096), // Show some initial size preview
+    details: `${sig.description} found at offset 0x${sig.offset.toString(16).toUpperCase()}`
+  }));
+
+  // Detect features from scanned signatures
+  const detectedFeatures = {
+    images: detectedSignatures.some(s => s.type === 'image'),
+    audio: detectedSignatures.some(s => s.type === 'audio'),
+    video: detectedSignatures.some(s => s.type === 'video'),
+    text: false,
+    tables: detectedSignatures.some(s => s.type === 'database'),
+    resources: detectedSignatures.length > 0
+  };
+
+  return {
+    formatName: detectedSignatures.length > 0 ? `Raw Scan (${detectedSignatures[0].name} detected)` : 'Generic Binary File / RAW',
+    mimeType: detectedSignatures.length > 0 ? `application/x-${detectedSignatures[0].ext}` : 'application/octet-stream',
+    isText: false,
+    metadata: [
+      { key: 'raw_mode', label: 'Chế độ phân tích', value: 'Quét Thô (Raw Scan Mode)', editable: false },
+      { key: 'raw_warn', label: 'Cảnh báo Parser', value: warningMessage, editable: false },
+      { key: 'detected_pats', label: 'Số chữ ký phát hiện', value: `${detectedSignatures.length} mẫu chữ ký`, editable: false }
+    ],
+    structures,
+    embeddedItems,
+    detectedFeatures,
+    isRawScanMode: true,
+    rawScanWarning: warningMessage
+  };
+}
+
 /**
- * Automagically selects the matching parser, fallback to generic binary
+ * Automagically selects the matching parser, fallback to generic binary / Raw Scan Mode
+ * Every parser is executed in a sandbox try-catch block so that exceptions do not halt analysis.
  */
 export async function runSmartParser(file: File, header: Uint8Array): Promise<ParserResult> {
   const size = file.size;
   const name = file.name.toLowerCase();
   
   for (const plugin of PARSER_PLUGINS) {
-    if (plugin.detect(header, name)) {
+    let matches = false;
+    try {
+      matches = plugin.detect(header, name);
+    } catch (detectErr) {
+      console.warn(`Smart parser detector ${plugin.name} failed:`, detectErr);
+      matches = false;
+    }
+
+    if (matches) {
       try {
         return await plugin.parse(header, file, size);
       } catch (err) {
-        console.warn(`Smart parser ${plugin.name} failed, falling back:`, err);
+        console.warn(`Smart parser ${plugin.name} failed during parse, falling back to Raw Scan Mode:`, err);
+        return await runRawScanMode(file, header, `Bộ phân tích chuyên biệt ${plugin.name} gặp lỗi cấu trúc: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
   
-  return await getGenericBinaryParser(file, size);
+  // No matching parser found, switch to Raw Scan Mode!
+  return await runRawScanMode(file, header, 'Không tìm thấy bộ phân tích cấu trúc cụ thể cho định dạng này.');
 }

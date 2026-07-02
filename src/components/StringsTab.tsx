@@ -15,9 +15,10 @@ interface StringsTabProps {
   onJumpToOffset: (offset: number) => void;
   onPatchString?: (offset: number, originalLen: number, newValue: string) => void;
   analysis: AnalysisResult | null;
+  isAnalyzing?: boolean;
 }
 
-export default function StringsTab({ file, virtualFileSize, onJumpToOffset, onPatchString, analysis }: StringsTabProps) {
+export default function StringsTab({ file, virtualFileSize, onJumpToOffset, onPatchString, analysis, isAnalyzing }: StringsTabProps) {
   const { toast } = useUI();
   
   const [filterQuery, setFilterQuery] = useState('');
@@ -53,16 +54,16 @@ export default function StringsTab({ file, virtualFileSize, onJumpToOffset, onPa
     return stats;
   }, [analysis]);
 
-  if (!analysis) {
+  if (!analysis || (isAnalyzing && strings.length === 0)) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4 bg-[#0a0f1c]">
         <div className="w-16 h-16 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
-          <RefreshCw className="w-8 h-8 text-white/20 animate-spin" />
+          <RefreshCw className="w-8 h-8 text-purple-400 animate-spin" />
         </div>
         <div className="max-w-xs">
           <h3 className="text-white font-bold uppercase tracking-widest text-sm">Đang trích xuất chuỗi...</h3>
           <p className="text-white/40 text-[10px] mt-2 leading-relaxed">
-            Hệ thống đang quét các khối dữ liệu nhị phân để trích xuất chuỗi ký tự có nghĩa. (Scanning chunks...)
+            Hệ thống đang quét các khối dữ liệu nhị phân chạy ngầm để trích xuất chuỗi ký tự. Bạn vẫn có thể sử dụng các tab Tổng quan, Cấu trúc, Siêu dữ liệu ngay lúc này!
           </p>
         </div>
       </div>
@@ -143,10 +144,15 @@ export default function StringsTab({ file, virtualFileSize, onJumpToOffset, onPa
                 </div>
                 <div className="flex items-center space-x-3 shrink-0">
                   <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tighter ${
-                    s.type === 'url' ? 'bg-blue-500/20 text-blue-400' :
-                    s.type === 'email' ? 'bg-emerald-500/20 text-emerald-400' :
-                    s.type === 'password' || s.type === 'token' ? 'bg-red-500/20 text-red-400' :
-                    'bg-white/5 text-white/40'
+                    s.type === 'url' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/10' :
+                    s.type === 'email' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/10' :
+                    s.type === 'api_key' || s.type === 'password' || s.type === 'token' ? 'bg-red-500/20 text-red-400 border border-red-500/10' :
+                    s.type === 'ip' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/10' :
+                    s.type === 'shell' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/10' :
+                    s.type === 'json' || s.type === 'xml' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/10' :
+                    s.type === 'sql' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/10' :
+                    s.type === 'path' ? 'bg-teal-500/20 text-teal-400 border border-teal-500/10' :
+                    'bg-white/5 text-white/40 border border-white/5'
                   }`}>
                     {s.type}
                   </span>
