@@ -16,9 +16,16 @@ import { useLanguage } from './components/LanguageProvider';
 import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+import { engineManager } from './lib/engine/manager';
+import { AiEngine } from './lib/engine/aiEngine';
+
+// Register Engines
+engineManager.register('AiEngine', new AiEngine());
+
 import LogoutConfirmModal from './components/LogoutConfirmModal';
 import UserProfileView from './components/UserProfile';
 import AdminPanel from './components/AdminPanel';
+import NotFound from './components/NotFound';
 
 interface ProtectedRouteProps {
   user: User | null;
@@ -348,7 +355,7 @@ export default function App() {
                           className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
                         >
                           <Home className="w-4 h-4 sm:mr-2" />
-                          <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                          <span className="hidden sm:inline">{t('backToDashboard' as any)}</span>
                         </button>
                       } />
                       <Route path="/profile" element={
@@ -357,7 +364,7 @@ export default function App() {
                           className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
                         >
                           <Home className="w-4 h-4 sm:mr-2" />
-                          <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                          <span className="hidden sm:inline">{t('backToDashboard' as any)}</span>
                         </button>
                       } />
                       <Route path="/admin" element={
@@ -366,7 +373,7 @@ export default function App() {
                           className="flex items-center px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
                         >
                           <Home className="w-4 h-4 sm:mr-2" />
-                          <span className="hidden sm:inline">{t('backToDashboard')}</span>
+                          <span className="hidden sm:inline">{t('backToDashboard' as any)}</span>
                         </button>
                       } />
                       <Route path="/" element={
@@ -409,7 +416,7 @@ export default function App() {
                     <div className="flex flex-col text-left">
                       <span className="font-bold text-white text-xs tracking-tight uppercase">WebHexed</span>
                       <span className="text-[10px] text-[#94A3B8] font-mono truncate max-w-[140px] block">
-                        {location.pathname === '/workspace' && selectedFile ? selectedFile.name : (location.pathname === '/profile' ? t('viewProfile') || 'Profile' : 'Dashboard')}
+                        {location.pathname === '/workspace' && selectedFile ? selectedFile.name : (location.pathname === '/profile' ? t('viewProfile' as any) || 'Profile' : 'Dashboard')}
                       </span>
                     </div>
                   </div>
@@ -562,8 +569,8 @@ export default function App() {
           </Route>
         </Route>
 
-        {/* Catch-all Redirect */}
-        <Route path="*" element={<Navigate to={user ? "/" : "/auth"} replace />} />
+        {/* Catch-all Not Found Page */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
 
       {/* Global uploading screen overlay */}

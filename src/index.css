@@ -92,3 +92,42 @@ html {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Markdown Table Styles */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 11px;
+  background-color: #11161D;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #2A313C;
+}
+
+.prose th {
+  background-color: #171C23;
+  color: #3B82F6;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2A313C;
+  font-weight: 600;
+}
+
+.prose td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #2A313C;
+  color: #E8EAF0;
+}
+
+.prose tr:last-child td {
+  border-bottom: none;
+}
+
+.prose code {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3B82F6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}

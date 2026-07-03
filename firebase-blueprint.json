@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "A single message in the AI chat history.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "ai"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "actions": { "type": "array" }
+      },
+      "required": ["role", "text", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/files/{fileId}/chat_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages sent in the AI analysis tab for a specific file."
+    }
+  }
+}

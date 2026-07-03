@@ -30,8 +30,15 @@ export interface AnalysisResult {
   strings: Array<{
     offset: number;
     value: string;
+    originalValue?: string;
     length: number;
-    type: 'url' | 'email' | 'json' | 'xml' | 'lua' | 'java' | 'kotlin' | 'swift' | 'unity' | 'unreal' | 'flutter' | 'react' | 'sql' | 'password' | 'token' | 'api_key' | 'package' | 'domain' | 'general';
+    type: string;
+    encoding?: string;
+    category?: string;
+    confidence?: number;
+    entropy?: number;
+    offsets?: number[];
+    count?: number;
   }>;
   metadata: Array<{
     key: string;
@@ -57,6 +64,11 @@ export interface AnalysisResult {
   }>;
   isRawScanMode?: boolean;
   rawScanWarning?: string;
+  entropy?: number;
+  deepScan?: any;
+  mimeType?: string;
+  compressionRatio?: number;
+  isPacked?: boolean;
 }
 
 /**
@@ -124,6 +136,13 @@ export function startAnalysisWorker(
         stageId: data.stageId,
         stageName: data.stageName,
         stageEvent: 'start'
+      });
+    } else if (data.type === 'STRINGS_BATCH_STREAM') {
+      onProgress(data.progress, data.statusText, {
+        stageId: 'strings',
+        stageEvent: 'stream',
+        stringsBatch: data.stringsBatch,
+        bytesScanned: data.bytesScanned
       });
     } else if (data.type === 'STAGE_UPDATE') {
       onProgress(data.progress, data.statusText, {

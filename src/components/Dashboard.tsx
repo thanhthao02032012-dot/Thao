@@ -226,7 +226,7 @@ function StatCard({ icon, title, value, color }: { icon: React.ReactNode, title:
   return (
     <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 flex flex-col">
       <div className="flex items-center space-x-2 mb-2 opacity-60">
-        {React.cloneElement(icon as React.ReactElement, { className: 'w-3 h-3 text-white' })}
+        {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-3 h-3 text-white' })}
         <span className="text-[10px] uppercase tracking-widest text-white/60">{title}</span>
       </div>
       <span className="text-xl font-bold text-white/90">{value}</span>
@@ -237,7 +237,7 @@ function StatCard({ icon, title, value, color }: { icon: React.ReactNode, title:
 function QuickAction({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick?: () => void }) {
   return (
     <button onClick={onClick} className="flex flex-col items-center justify-center p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all space-y-1">
-      {React.cloneElement(icon as React.ReactElement, { className: 'w-4 h-4 text-purple-400/70' })}
+      {React.cloneElement(icon as React.ReactElement<any>, { className: 'w-4 h-4 text-purple-400/70' })}
       <span className="text-[10px] uppercase font-bold text-white/40">{label}</span>
     </button>
   );

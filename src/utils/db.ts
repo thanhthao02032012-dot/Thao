@@ -1,6 +1,7 @@
 const DB_NAME = 'WebHexedDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'files';
+const CACHE_STORE_NAME = 'analysis_cache';
 
 export function initDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,8 +20,54 @@ export function initDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
       }
+      if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+        db.createObjectStore(CACHE_STORE_NAME);
+      }
     };
   });
+}
+
+export async function storeAnalysisCache(key: string, data: any): Promise<void> {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(CACHE_STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(CACHE_STORE_NAME);
+      const request = store.put(data, key);
+
+      request.onsuccess = () => {
+        resolve();
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  } catch (e) {
+    console.error('Failed to store analysis in cache', e);
+  }
+}
+
+export async function getAnalysisCache(key: string): Promise<any | null> {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(CACHE_STORE_NAME, 'readonly');
+      const store = transaction.objectStore(CACHE_STORE_NAME);
+      const request = store.get(key);
+
+      request.onsuccess = () => {
+        resolve(request.result || null);
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
+  } catch (e) {
+    console.error('Failed to get analysis from cache', e);
+    return null;
+  }
 }
 
 export async function storeFile(id: string, file: File): Promise<void> {

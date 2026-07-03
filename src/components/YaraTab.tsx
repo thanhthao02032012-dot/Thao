@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Shield, Play, Pause, X, ShieldAlert, CheckCircle, Terminal, 
   Sparkles, Plus, Trash2, Code, FileText, ChevronRight, 
-  Search, ShieldCheck, RefreshCw, Layers, ArrowUpRight, Activity
+  Search, ShieldCheck, RefreshCw, Layers, ArrowUpRight, Activity,
+  Upload, Download
 } from 'lucide-react';
 import { 
   DEFAULT_YARA_RULES, YaraRule, YaraScanResult, 
@@ -56,6 +57,50 @@ rule CustomGameSignature {
   // AI summary states
   const [aiSummary, setAiSummary] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
+
+  const [syntaxStatus, setSyntaxStatus] = useState<{ valid: boolean; message: string }>({ valid: true, message: '✓ Cú pháp hợp lệ (1 rule)' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editorMode !== 'custom') return;
+    try {
+      const parsed = parseYaraRules(customRuleText);
+      if (parsed && parsed.length > 0) {
+        setSyntaxStatus({ valid: true, message: `✓ Cú pháp hợp lệ (${parsed.length} luật YARA được tải)` });
+      } else {
+        setSyntaxStatus({ valid: false, message: '⚠️ Chưa phát hiện khối rule hợp lệ (ví dụ: rule MyRule { ... })' });
+      }
+    } catch (err: any) {
+      setSyntaxStatus({ valid: false, message: `❌ Lỗi phân tích cú pháp: ${err.message || 'Cấu trúc không đúng'}` });
+    }
+  }, [customRuleText, editorMode]);
+
+  const handleImportYara = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setCustomRuleText(text);
+        toast("✓ Đã nhập luật YARA thành công!", "success");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportYara = () => {
+    const blob = new Blob([customRuleText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'custom_rule.yar';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast("✓ Đã xuất tập luật YARA (.yar) về máy!", "success");
+  };
 
   // Auto trigger scan on file switch if rule list changes
   const handleStartScan = async () => {
@@ -364,7 +409,31 @@ rule CustomGameSignature {
             <div className="space-y-3 flex-1 flex flex-col">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-white/50">Trình biên tập YARA Rule:</span>
-                <span className="text-[10px] font-mono text-purple-400">YARA Syntax Compliant</span>
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleImportYara} 
+                    accept=".yar,.yara,.txt" 
+                    className="hidden" 
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 border border-white/5 cursor-pointer transition-colors"
+                    title="Nhập luật từ tệp .yar"
+                  >
+                    <Upload className="w-3 h-3" />
+                    Tải lên
+                  </button>
+                  <button
+                    onClick={handleExportYara}
+                    className="p-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 border border-white/5 cursor-pointer transition-colors"
+                    title="Xuất luật hiện tại thành tệp .yar"
+                  >
+                    <Download className="w-3 h-3" />
+                    Tải về
+                  </button>
+                </div>
               </div>
               <textarea
                 value={customRuleText}
@@ -372,6 +441,16 @@ rule CustomGameSignature {
                 className="w-full h-[320px] bg-black/40 border border-white/10 rounded-xl p-3 font-mono text-[11px] text-purple-200 focus:outline-none focus:border-purple-500/50 resize-none leading-relaxed"
                 spellCheck={false}
               />
+
+              {/* Real-time Syntax Checker Banner */}
+              <div className={`p-2.5 rounded-xl border text-[11px] font-mono leading-relaxed flex items-center gap-2 ${
+                syntaxStatus.valid 
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                {syntaxStatus.message}
+              </div>
+
               <p className="text-[10px] text-white/40 leading-relaxed">
                 * Luật tùy chỉnh sẽ tự động được biên dịch khi nhấn nút <b>"Bắt đầu rà soát sâu"</b> phía trên. Hỗ trợ đầy đủ các kiểu chuỗi nhị phân (Hex Pattern), Regex và chuỗi văn bản thuần.
               </p>

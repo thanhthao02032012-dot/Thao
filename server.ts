@@ -4,29 +4,14 @@ import fs from 'fs';
 import os from 'os';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
-
-// Lazy-initialized Gemini Client helper
-const getGeminiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is required for AI Summary');
-  }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-};
+import { getGeminiClient, generateContentWithRetry, extractTextFromResponse } from './src/lib/gemini';
 
 const app = express();
 const PORT = 3000;
 
 // Body parsing middleware for JSON endpoints
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Set up temp directory for hex files
 const TEMP_DIR = path.join(os.tmpdir(), 'hex_editor');
@@ -907,6 +892,10 @@ app.post('/api/file/history/restore', (req, res) => {
   }
 });
 
+// 13. AI Gateway (Upgrades item 13)
+const aiCache = new Map<string, { reply: any; timestamp: number }>();
+let aiRequestInProgress = false;
+
 // 9. Streaming Multi-Block Entropy Calculator (Upgrades item 9)
 app.get('/api/file/entropy', (req, res) => {
   const { fileId } = req.query;
@@ -1243,32 +1232,258 @@ app.post('/api/file/close', (req, res) => {
 });
 
 // API Endpoint: YARA AI Profile Summary
+// DEPRECATED: Use /api/ai/gateway instead
 app.post('/api/yara/ai-summary', async (req, res) => {
-  const { filename, filesize, ruleMatches } = req.body;
+    // ... logic for summary ...
+});
+
+import { engineManager } from './src/lib/engine/manager';
+import { AiEngine } from './src/lib/engine/aiEngine';
+
+// Initialize engines on server
+engineManager.register('AiEngine', new AiEngine());
+
+// API Gateway (Orchestrator)
+app.post('/api/ai/gateway', async (req, res) => {
+  const { messages, scanContext, query, type } = req.body;
+  
+  try {
+    const aiClient = getGeminiClient();
+    
+    // Summarize context carefully
+    const contextStr = JSON.stringify(scanContext, (key, value) => {
+       if (typeof value === 'string' && value.length > 800) {
+           return value.substring(0, 800) + '...[truncated]';
+       }
+       if (Array.isArray(value) && value.length > 30) {
+           return value.slice(0, 30).concat(['...[truncated]']);
+       }
+       return value;
+    });
+
+    const systemPrompt = `Bạn là Gemini AI Assistant - Chuyên gia phân tích nhị phân tối cao của WebHexed.
+Nhiệm vụ: Phân tích sâu, giải thích cấu trúc và ĐỀ XUẤT CÁC BẢN VÁ (PATCH) tối ưu.
+
+DỮ LIỆU FILE:
+${contextStr}
+
+PHONG CÁCH:
+- Trả lời cực kỳ súc tích, đi thẳng vào vấn đề.
+- LUÔN CHỦ ĐỘNG: Đừng chỉ trả lời, hãy đề xuất 3-4 bước tiếp theo (suggest_questions) dựa trên kết quả vừa tìm được.
+- GOM NHÓM HÀNH ĐỘNG: Nếu cần sửa nhiều chỗ, hãy gửi TẤT CẢ các action apply_patch trong cùng một câu trả lời để người dùng có thể "Chạy tất cả".
+
+QUY TẮC PHÁT SINH BẢN VÁ (PATCH) CỰC KỲ QUAN TRỌNG:
+1. Khi người dùng yêu cầu chỉnh sửa file, chỉnh sửa bytes, chỉnh sửa văn bản, thay đổi chuỗi ký tự, sửa đổi giá trị (metadata), hack game, thay thế hoặc Việt hóa:
+   - Bạn KHÔNG ĐƯỢC CHỈ TRẢ LỜI BẰNG VĂN BẢN suông rằng "Tôi đã chỉnh sửa thành công".
+   - Bạn BẮT BUỘC phải tạo ra một hoặc nhiều hành động "apply_patch" trong khối \`\`\`json_action dưới đây.
+   - Mỗi hành động "apply_patch" phải có offset chính xác (ở hệ thập phân, ví dụ: 0x10 chuyển thành 16), chuỗi dữ liệu hex tương ứng (hexData) và mô tả ngắn gọn (description).
+   - Nếu bạn không xuất bản vá "apply_patch", hệ thống sẽ KHÔNG THỂ chỉnh sửa file và người dùng sẽ thấy thông báo của bạn chỉ là lý thuyết suông!
+
+QUY TẮC ACTION (JSON_ACTION ở cuối):
+\`\`\`json_action
+[
+  {"action": "apply_patch", "payload": {"offset": 123, "hexData": "AA", "description": "Fix bug A"}},
+  {"action": "apply_patch", "payload": {"offset": 125, "hexData": "BB", "description": "Fix bug B"}},
+  {"action": "suggest_questions", "payload": {"questions": ["Q1", "Q2"]}}
+]
+\`\`\`
+
+CÁC HÀNH ĐỘNG HỖ TRỢ:
+- open_tab, jump_offset, highlight_string, apply_patch, run_audio_engine, suggest_questions.`;
+
+    const formattedMessages = (messages || []).map((m: any) => ({
+      role: m.role === 'ai' ? 'model' : 'user',
+      parts: [{ text: m.text || '' }]
+    }));
+
+    // For first message, combine with system prompt
+    if (formattedMessages.length > 0 && formattedMessages[0].role === 'user') {
+      formattedMessages[0].parts[0].text = `${systemPrompt}\n\n--- User Query ---\n${formattedMessages[0].parts[0].text}`;
+    } else {
+      formattedMessages.unshift({ role: 'user', parts: [{ text: systemPrompt }] });
+      formattedMessages.unshift({ role: 'model', parts: [{ text: "Tôi đã sẵn sàng hỗ trợ bạn phân tích và sửa đổi file." }] });
+    }
+
+    const response = await generateContentWithRetry(aiClient, {
+      model: "gemini-3.1-flash-lite",
+      contents: formattedMessages,
+      config: {
+        maxOutputTokens: 1500,
+        temperature: 0.7
+      }
+    });
+
+    res.json({ reply: extractTextFromResponse(response) });
+  } catch (err: any) {
+    console.error('AI Gateway Error:', err);
+    res.status(500).json({ error: 'AI Orchestration failed' });
+  }
+});
+
+// API Endpoint: Semantic String Searching with Gemini API (Regex & Keywords Generator)
+app.post('/api/strings/ai-search', async (req, res) => {
+  const { query } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Missing query' });
+  }
 
   try {
     const aiClient = getGeminiClient();
-    const prompt = `Bạn là chuyên gia phân tích nhị phân và mã độc (Binary Intelligence Analyst) thuộc hệ thống phân tích cao cấp WebHexed.
-Hãy đưa ra một bản tóm tắt phân tích thông minh bằng Tiếng Việt (khoảng 3-4 câu ngắn gọn, súc tích và có tính chuyên môn cực cao) dựa trên các thông tin tệp tin được quét:
-- Tên tệp tin: ${filename}
+
+    const prompt = `Bạn là một chuyên gia phân tích dữ liệu và kỹ thuật đảo ngược. Người dùng muốn tìm kiếm các chuỗi trong một tệp tin nhị phân với ý định: "${query}".
+Nhiệm vụ của bạn là phân tích ý định này và tạo ra một bộ tiêu chí tìm kiếm bao gồm các mảng từ khoá (keywords) và mảng biểu thức chính quy (regexes) chuẩn JavaScript.
+
+Hãy suy luận thật thông minh. Ví dụ:
+- Nếu tìm "địa chỉ IP", regex: "^(?:[0-9]{1,3}\\\\.){3}[0-9]{1,3}$"
+- Nếu tìm "đường dẫn url", regex: "^https?://.+"
+- Nếu tìm "tài khoản email", regex: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}"
+- Nếu tìm "các hàm mã hoá", keywords: ["encrypt", "decrypt", "cipher", "crypto", "aes", "rsa", "md5"]
+
+Phản hồi CHỈ dưới dạng JSON Object thô (không bọc trong \`\`\`json, không giải thích thêm):
+{
+  "regexes": ["regex1", "regex2"],
+  "keywords": ["keyword1", "keyword2"],
+  "explanation": "Lý do bằng tiếng Việt, 1 câu ngắn gọn giải thích tại sao chọn những tiêu chí này."
+} `;
+
+    const response = await generateContentWithRetry(aiClient, {
+      model: "gemini-3.1-flash-lite",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    let resultText = extractTextFromResponse(response) || '{}';
+    // Robust extraction if JSON is wrapped in text
+    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      resultText = jsonMatch[0];
+    }
+    resultText = resultText.replace(/```json/ig, '').replace(/```/g, '').trim();
+    res.json(JSON.parse(resultText));
+  } catch (err: any) {
+    console.error('Semantic AI search failed:', err);
+    res.status(500).json({ error: err.message || 'Tìm kiếm AI thất bại' });
+  }
+});
+
+// API Endpoint: Intelligent File Deep Explainer
+app.post('/api/file/ai-analyze', async (req, res) => {
+  const { filename, filesize, fileType, entropy, insights, question, fileContent } = req.body;
+
+  try {
+    const aiClient = getGeminiClient();
+    let prompt = `Bạn là một Chuyên gia Kỹ thuật Đảo ngược và Chuyên viên Phân tích Bảo mật Hệ thống (Senior Reverse Engineer & Security Researcher).
+Người dùng đang yêu cầu phân tích thông minh cho tệp tin sau trong WebHexed:
+- Tên tệp tin: "${filename}"
 - Kích thước: ${filesize} bytes
-- Kết quả quét trùng khớp tập luật YARA (YARA Rule matches): ${JSON.stringify(ruleMatches)}
+- Định dạng phát hiện: "${fileType || 'Không xác định'}"
+- Mật độ Entropy: ${entropy !== undefined ? entropy.toFixed(4) : 'Không xác định'}
+- Các điểm nhận diện thông minh: ${JSON.stringify(insights || [])}
 
-Yêu cầu tóm tắt phân tích:
-1. Xác định tệp tin này thuộc định dạng, công nghệ hoặc cấu trúc gì rõ ràng nhất (ví dụ: UnityFS Game Asset Bundle, Android Package APK, PE Executable, PDF, v.v.).
-2. Giải thích ý nghĩa nghiệp vụ của các luật YARA khớp (ví dụ: khớp chữ ký nhị phân nén LZ4/Zlib, phát hiện các đoạn tài nguyên hoặc các hàm webshell/mã độc nguy hiểm).
-3. Kết luận nhanh về độ tin cậy và mức độ an toàn (Sạch / Nghi vấn / Nguy hiểm).
-4. Viết súc tích, phong cách kỹ thuật sắc sảo, không lan man, không rườm rà sáo rỗng. Không có lời chào hay ký tên.`;
+Câu hỏi/Yêu cầu cụ thể của người dùng: "${question || 'Hãy đưa ra nhận định tổng quan, đánh giá độ an toàn và giải nghĩa cấu trúc của tệp tin này.'}"`;
 
-    const response = await aiClient.models.generateContent({
-      model: "gemini-3.5-flash",
+    if (fileContent) {
+      prompt += `\n\nDưới đây là một số chuỗi ký tự (strings) được trích xuất từ tệp tin có liên quan trực tiếp đến truy vấn của người dùng:\n${fileContent}\n\nHãy sử dụng các chuỗi này để trả lời chi tiết và chính xác hơn cho người dùng.`;
+    }
+
+    prompt += `\n\nNhiệm vụ của bạn:
+Hãy đưa ra câu trả lời bằng Tiếng Việt với phong cách cực kỳ chuyên nghiệp, sắc bén và am hiểu sâu sắc về cấu trúc nhị phân, định dạng file, malware analysis, game assets, v.v.
+Yêu cầu trình bày:
+- Trả lời rõ ràng, súc tích, đi thẳng vào bản chất kỹ thuật.
+- Sử dụng các định dạng danh sách (bullet points) hoặc đoạn ngắn để người dùng dễ đọc.
+- Đưa ra khuyến nghị thiết thực về bảo mật hoặc cách khai thác tiếp theo trong WebHexed.
+- Trả về câu trả lời thuần Markdown (không kèm lời chào hay ký tên rườm rà).`;
+
+    const response = await generateContentWithRetry(aiClient, {
+      model: "gemini-3.1-flash-lite",
       contents: prompt,
     });
 
-    res.json({ summary: response.text });
+    res.json({ analysis: extractTextFromResponse(response) });
   } catch (err: any) {
-    console.error('YARA Gemini summary error:', err);
-    res.status(500).json({ error: err.message || 'Không thể tạo tóm tắt AI' });
+    console.error('File AI analysis failed:', err);
+    res.status(500).json({ error: err.message || 'Phân tích AI thất bại' });
+  }
+});
+
+// API Endpoint: Intelligent AI Chat
+app.post('/api/file/ai-chat', async (req, res) => {
+  const { messages, scanContext } = req.body;
+
+  try {
+    const aiClient = getGeminiClient();
+    
+    // Summarize context carefully to avoid exceeding token limit
+    const contextStr = JSON.stringify(scanContext, (key, value) => {
+       if (typeof value === 'string' && value.length > 1000) {
+           return value.substring(0, 1000) + '...[truncated]';
+       }
+       if (Array.isArray(value) && value.length > 50) {
+           return value.slice(0, 50).concat(['...[truncated]']);
+       }
+       return value;
+    });
+
+    const systemPrompt = `Bạn là AI Assistant thông minh tích hợp sâu trong ứng dụng phân tích nhị phân WebHexed.
+Nhiệm vụ của bạn là hỗ trợ người dùng khám phá, phân tích và giải thích các tệp tin nhị phân một cách chuyên nghiệp nhưng dễ hiểu.
+
+Dữ liệu phân tích hiện tại (Deep Scan Context):
+${contextStr}
+
+PHONG CÁCH PHẢN HỒI:
+- Trình bày câu trả lời đẹp mắt, sử dụng Markdown (In đậm, Danh sách, Bảng biểu) để thông tin dễ tiếp nhận.
+- Trả lời bằng tiếng Việt tự nhiên, chuyên nghiệp.
+- Nếu giải thích về cấu trúc tệp hoặc mã giả, hãy sử dụng khối mã (\`\`\`c, \`\`\`asm, v.v.).
+
+QUY TẮC PHẢN HỒI:
+1. Dựa trên dữ liệu thực tế: Chỉ sử dụng dữ liệu được cung cấp trong Scan Context. Nếu không thấy thông tin, hãy nói "Tôi chưa quét thấy dữ liệu này" thay vì bịa ra.
+2. Hướng dẫn hành động: Thay vì chỉ nói, hãy hướng dẫn người dùng sử dụng các công cụ trong ứng dụng (như Hex Editor, String Tab).
+3. Sử dụng ACTION (BẮT BUỘC): Để tương tác trực tiếp với ứng dụng, bạn PHẢI đặt Action trong khối JSON_ACTION ở cuối câu trả lời nếu cần thiết:
+\`\`\`json_action
+{"action": "ACTION_NAME", "payload": {"key": "value"}}
+\`\`\`
+
+CÁC ACTION HỖ TRỢ:
+- "open_tab": Mở một tab chức năng (tabId: "strings" | "metadata" | "structure" | "media" | "advanced" | "yara" | "scan_pipeline" | "overview")
+- "jump_offset": Nhảy đến địa chỉ offset (hệ thập phân) trong Hex Editor.
+- "highlight_string": Tìm kiếm và làm nổi bật một chuỗi trong tab Strings.
+- "run_scan": Gợi ý người dùng thực hiện quét Deep Scan mới.
+- "apply_patch": Đề xuất áp dụng bản vá (patch) vào file tại offset cụ thể (payload: {"offset": number, "hexData": "chuỗi hex", "description": "mô tả lý do vá"}).
+
+Khi phát hiện điều gì đó đáng ngờ (mã độc, backdoor, v.v.), hãy ghi rõ: **Độ tin cậy: Cao/Trung bình/Thấp** và giải thích lý do.`;
+
+    // Convert messages to Gemini format (user, model)
+    const formattedMessages = messages.map((m: any) => ({
+      role: m.role === 'ai' ? 'model' : 'user',
+      parts: [{ text: m.text }]
+    }));
+
+    // Add system instruction as the first message or prepend to the first user message
+    if (formattedMessages.length > 0 && formattedMessages[0].role === 'user') {
+      formattedMessages[0].parts[0].text = `${systemPrompt}\n\n--- Bắt đầu hội thoại ---\n\n${formattedMessages[0].parts[0].text}`;
+    } else {
+      formattedMessages.unshift({
+        role: 'user',
+        parts: [{ text: systemPrompt }]
+      });
+      formattedMessages.unshift({
+        role: 'model',
+        parts: [{ text: 'Đã hiểu quy tắc.' }]
+      });
+    }
+
+    const response = await generateContentWithRetry(aiClient, {
+      model: "gemini-3.1-flash-lite",
+      contents: formattedMessages
+    });
+
+    res.json({ reply: extractTextFromResponse(response) });
+  } catch (err: any) {
+    console.error('AI Chat failed with detailed error:', err, 'Status:', err.status, 'Message:', err.message);
+    res.status(500).json({ error: err.message || 'AI Chat failed' });
   }
 });
 

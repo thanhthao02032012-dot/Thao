@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useUI } from './UIProvider';
 import { readAndPatchChunk } from '../utils/fileStream';
+import { SearchBrain } from '../lib/SearchBrain';
 
 interface SearchTabProps {
   file: File;
@@ -61,7 +62,7 @@ export default function SearchTab({ file, patches, virtualFileSize, onJumpToOffs
       return;
     }
 
-    // Convert query to bytes pattern
+    // Fallback to existing binary search logic if no local results
     let pattern: Uint8Array;
     try {
       if (searchType === 'hex') {

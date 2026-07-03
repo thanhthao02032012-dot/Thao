@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Layers, ChevronRight, CircleDot, Info, Calendar, Box, Database, CornerDownRight,
-  Edit3, CheckCircle, RefreshCw, Cpu, Tag, HelpCircle, Save, ShieldCheck, Link2, ArrowDown
+  Edit3, CheckCircle, RefreshCw, Cpu, Tag, HelpCircle, Save, ShieldCheck, Link2, ArrowDown,
+  Folder, FolderOpen, File, ChevronDown
 } from 'lucide-react';
 import { AnalysisResult } from '../utils/fileAnalyzer';
 import { useUI } from './UIProvider';
@@ -152,6 +153,119 @@ export default function StructureTab({
     if (navigator.vibrate) navigator.vibrate(8);
   };
 
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
+    header: true,
+    section: true,
+    resource: true,
+    metadata: true,
+    strings: true,
+    unknown: true,
+    footer: true
+  });
+
+  const toggleFolder = (folder: string) => {
+    setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
+  };
+
+  const renderFolderNode = (id: string, label: string, type: string, textClass: string) => {
+    const matched = segments.filter(seg => seg.type === type);
+    const isOpen = expandedFolders[id];
+    
+    return (
+      <div className="space-y-1">
+        <button 
+          onClick={() => toggleFolder(id)}
+          className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-xl text-xs font-semibold text-white/80 transition-colors text-left cursor-pointer"
+        >
+          <div className="flex items-center space-x-2">
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-white/40 shrink-0" />}
+            {isOpen ? <FolderOpen className="w-4 h-4 text-purple-400 shrink-0" /> : <Folder className="w-4 h-4 text-purple-400 shrink-0" />}
+            <span>{label}</span>
+            <span className="text-[10px] text-white/35 font-mono">({matched.length})</span>
+          </div>
+        </button>
+        {isOpen && (
+          <div className="pl-6 space-y-0.5 border-l border-white/5 ml-4">
+            {matched.length > 0 ? (
+              matched.map((seg, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    onJumpToOffset(seg.start);
+                    toast(`Chuyển đến Offset 0x${seg.start.toString(16).toUpperCase()}`, 'info');
+                  }}
+                  className="w-full flex items-center justify-between py-1 px-2 hover:bg-purple-500/10 rounded-lg text-[11px] text-white/60 hover:text-white transition-all text-left group cursor-pointer"
+                >
+                  <div className="flex items-center space-x-1.5 truncate">
+                    <CircleDot className="w-2.5 h-2.5 text-purple-500/50 group-hover:text-purple-400" />
+                    <span className="truncate">{seg.name}</span>
+                  </div>
+                  <span className="font-mono text-[9px] text-purple-400/80 shrink-0">
+                    0x{seg.start.toString(16).toUpperCase()}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <span className="text-[10px] text-white/20 italic pl-4 block py-1">Không có phân đoạn</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderStringsFolder = () => {
+    const isOpen = expandedFolders.strings;
+    const count = analysis?.strings?.length || 0;
+    
+    return (
+      <div className="space-y-1">
+        <button 
+          onClick={() => toggleFolder('strings')}
+          className="w-full flex items-center justify-between p-2 hover:bg-white/5 rounded-xl text-xs font-semibold text-white/80 transition-colors text-left cursor-pointer"
+        >
+          <div className="flex items-center space-x-2">
+            {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-white/40 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-white/40 shrink-0" />}
+            {isOpen ? <FolderOpen className="w-4 h-4 text-purple-400 shrink-0" /> : <Folder className="w-4 h-4 text-purple-400 shrink-0" />}
+            <span>Strings</span>
+            <span className="text-[10px] text-white/35 font-mono">({count})</span>
+          </div>
+        </button>
+        {isOpen && (
+          <div className="pl-6 border-l border-white/5 ml-4">
+            {count > 0 ? (
+              <div className="space-y-0.5">
+                {analysis?.strings?.slice(0, 5).map((str, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      onJumpToOffset(str.offset);
+                      toast(`Chuyển đến Offset 0x${str.offset.toString(16).toUpperCase()}`, 'info');
+                    }}
+                    className="w-full flex items-center justify-between py-1 px-2 hover:bg-purple-500/10 rounded-lg text-[11px] text-white/60 hover:text-white transition-all text-left group cursor-pointer"
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <CircleDot className="w-2.5 h-2.5 text-purple-500/50 group-hover:text-purple-400" />
+                      <span className="truncate italic font-mono">"{str.value.slice(0, 15)}"</span>
+                    </div>
+                    <span className="font-mono text-[9px] text-purple-400/80 shrink-0">
+                      0x{str.offset.toString(16).toUpperCase()}
+                    </span>
+                  </button>
+                ))}
+                {count > 5 && (
+                  <span className="text-[9px] text-white/30 italic pl-4 block pt-1">...và {count - 5} chuỗi khác</span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[10px] text-white/20 italic pl-4 block py-1">Không có chuỗi</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Generating a mocked Relationship graph based on file type
   const getRelationshipGraph = () => {
     if (analysis?.fileType?.includes('APK') || file.name.endsWith('.apk')) {
@@ -239,8 +353,29 @@ export default function StructureTab({
         </div>
       )}
 
-      {/* Visual Block Representation Bar */}
-      <div className="bg-[#121829]/40 border border-white/5 rounded-3xl p-6 space-y-4">
+      {/* Visual Block Representation Bar & Side-by-Side Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Interactive Format Tree */}
+        <div className="lg:col-span-4 bg-[#121829]/40 border border-white/5 rounded-3xl p-5 space-y-4 lg:sticky lg:top-4 h-fit">
+          <h4 className="text-xs font-mono font-bold text-white/50 uppercase tracking-wider flex items-center">
+            <Layers className="w-3.5 h-3.5 mr-1.5 text-purple-400" />
+            Cấu trúc phân cấp (Format Tree)
+          </h4>
+          <div className="space-y-1.5">
+            {renderFolderNode('header', 'Header', 'header', 'border-sky-500/25 text-sky-400')}
+            {renderFolderNode('section', 'Sections', 'data', 'border-purple-500/25 text-purple-400')}
+            {renderFolderNode('resource', 'Resources', 'marker', 'border-emerald-500/25 text-emerald-400')}
+            {renderFolderNode('metadata', 'Metadata', 'metadata', 'border-amber-500/25 text-amber-400')}
+            {renderStringsFolder()}
+            {renderFolderNode('unknown', 'Unknown Data', 'unknown', 'border-rose-500/25 text-rose-400')}
+            {renderFolderNode('footer', 'Footer', 'footer', 'border-gray-500/25 text-gray-400')}
+          </div>
+        </div>
+
+        {/* Right Column: Visual block and Segments list */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Visual Block Representation Bar */}
+          <div className="bg-[#121829]/40 border border-white/5 rounded-3xl p-6 space-y-4">
         <h4 className="text-xs font-bold text-white uppercase tracking-wider">Phân đoạn nhị phân (Memory Alignment Map)</h4>
         
         <div className="h-6 w-full bg-white/5 rounded-full overflow-hidden flex p-1 border border-white/10">
@@ -444,6 +579,8 @@ export default function StructureTab({
             </div>
           );
         })}
+      </div>
+        </div>
       </div>
     </div>
   );

@@ -26,10 +26,11 @@ interface HexEditorProps {
   virtualFileSize: number;
   setVirtualFileSize: React.Dispatch<React.SetStateAction<number>>;
   onApplied?: () => void;
-  initialActiveToolTab?: 'search' | 'structures' | 'history' | 'checksums';
+  initialActiveToolTab?: 'search' | 'structures' | 'history' | 'checksums' | 'beginner';
   showToolsPanelProp?: boolean;
   onSelectOffset?: (offset: number) => void;
   perfMode?: string;
+  analysis?: any;
 }
 
 interface HistoryEntry {
@@ -56,7 +57,8 @@ export default function HexEditor({
   initialActiveToolTab,
   showToolsPanelProp,
   onSelectOffset,
-  perfMode
+  perfMode,
+  analysis
 }: HexEditorProps) {
   const { toast, confirm } = useUI();
   // Main view and scroll states
@@ -69,7 +71,7 @@ export default function HexEditor({
 
   // Right dock tool layout state
   const [showToolsPanel, setShowToolsPanel] = useState(true);
-  const [activeToolTab, setActiveToolTab] = useState<'search' | 'structures' | 'history' | 'checksums'>('search');
+  const [activeToolTab, setActiveToolTab] = useState<'search' | 'structures' | 'history' | 'checksums' | 'beginner'>('search');
 
   // Synchronize external props
   useEffect(() => {
@@ -266,6 +268,13 @@ export default function HexEditor({
     }
   };
 
+  // Synchronize view and stats whenever patches prop updates (e.g. from AI Chat or external actions)
+  useEffect(() => {
+    fetchWindowData(windowStartRow);
+    loadHashesAndEntropy();
+    loadStructures();
+  }, [patches]);
+
   // Scroll Throttle / Debounce engine
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const currentScrollTop = e.currentTarget.scrollTop;
@@ -384,8 +393,22 @@ export default function HexEditor({
       const scanSize = Math.min(128 * 1024, virtualFileSize);
       const buffer = await readAndPatchChunk(file, 0, scanSize, patches, virtualFileSize);
       const result = parseFileStructures(buffer);
-      setStructureType(result.type);
-      setStructures(result.structures);
+      
+      let mergedList = [...result.structures];
+      if (analysis && analysis.structure) {
+        analysis.structure.forEach((s: any) => {
+          if (!mergedList.some(node => node.offset === s.start)) {
+            mergedList.push({
+              name: `${s.name} [Deep Scan]`,
+              offset: s.start,
+              size: s.end - s.start,
+              details: `Kích thước: ${(s.end - s.start).toLocaleString()} bytes • Vùng: ${s.type || 'Phần thân'}`
+            });
+          }
+        });
+      }
+      setStructureType(result.type !== 'Unknown' ? result.type : (analysis?.fileType || 'Unknown'));
+      setStructures(mergedList);
     } catch (err) {
       console.error('Failed parsing templates:', err);
     } finally {
@@ -761,6 +784,69 @@ export default function HexEditor({
     return parseInt(editValue || '00', 16) || 0;
   }, [selectedOffset, editValue, version]);
 
+  const getByteClass = (offset: number, byteVal: number | null, isSelected: boolean, isPatched: boolean) => {
+    if (byteVal === null) return 'text-white/10';
+    if (isSelected) return 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold ring-2 ring-purple-400 z-10 scale-115 animate-pulse';
+    if (isPatched) return 'border border-emerald-500/50 text-emerald-300 font-extrabold bg-emerald-950/20';
+    
+    const isZero = byteVal === 0;
+
+    if (analysis) {
+      if (analysis.embeddedItems && analysis.embeddedItems.length > 0) {
+        const isEmbed = analysis.embeddedItems.some((item: any) => offset >= item.offset && offset < item.offset + (item.size || 0));
+        if (isEmbed) {
+          return 'bg-lime-500/10 text-lime-300 border border-lime-500/20 hover:bg-lime-500/20 font-bold';
+        }
+      }
+
+      if (analysis.structure && analysis.structure.length > 0) {
+        const match = analysis.structure.find((s: any) => offset >= s.start && offset < s.end);
+        if (match) {
+          const nameLower = match.name.toLowerCase();
+          if (match.type === 'header') {
+            return 'bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 font-bold';
+          }
+          if (match.type === 'metadata') {
+            return 'bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 font-bold';
+          }
+          if (match.type === 'footer') {
+            return 'bg-pink-500/15 text-pink-300 border border-pink-500/30 hover:bg-pink-500/25 font-bold';
+          }
+          if (nameLower.includes('damaged') || nameLower.includes('corrupt') || nameLower.includes('broken')) {
+            return 'bg-orange-500/20 text-orange-400 border border-orange-500/40 animate-pulse font-bold';
+          }
+          if (nameLower.includes('image') || nameLower.includes('png') || nameLower.includes('jpeg')) {
+            return 'bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 font-bold';
+          }
+          if (nameLower.includes('audio') || nameLower.includes('mp3') || nameLower.includes('wav')) {
+            return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 font-bold';
+          }
+          if (nameLower.includes('video') || nameLower.includes('mp4') || nameLower.includes('avi')) {
+            return 'bg-teal-500/15 text-teal-300 border border-teal-500/30 hover:bg-teal-500/25 font-bold';
+          }
+          if (nameLower.includes('compress') || nameLower.includes('zip') || nameLower.includes('zlib') || nameLower.includes('pack')) {
+            return 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 font-bold';
+          }
+          if (nameLower.includes('encrypt') || nameLower.includes('crypt')) {
+            return 'bg-violet-500/20 text-violet-300 border border-violet-500/40 hover:bg-violet-500/30 font-bold';
+          }
+          return 'bg-slate-500/15 text-slate-300 border border-slate-500/30 hover:bg-slate-500/25 font-bold';
+        }
+      }
+
+      if (analysis.strings && analysis.strings.length > 0) {
+        const isStr = analysis.strings.some((s: any) => offset >= s.offset && offset < s.offset + s.length);
+        if (isStr) {
+          return 'bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 font-bold';
+        }
+      }
+    }
+
+    return isZero 
+      ? 'text-white/25 hover:text-white/80 hover:bg-white/10' 
+      : 'text-white/85 hover:text-white hover:bg-purple-500/10';
+  };
+
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden">
       {/* 12. Session Recovery Banner */}
@@ -1032,12 +1118,7 @@ export default function HexEditor({
                               lastClickTimeRef.current = now;
                               lastClickedOffsetRef.current = offset;
                             }}
-                            className={`cursor-pointer px-0.5 rounded transition-all text-center select-all inline-block w-[21px] relative group text-xs font-mono
-                              ${isSelected ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold ring-2 ring-purple-400 z-10 scale-115  animate-pulse' : ''}
-                              ${isPatched && !isSelected ? 'border border-emerald-500/50 text-emerald-300 font-extrabold  bg-emerald-950/20' : ''}
-                              ${!isSelected && !isPatched && byteVal !== null ? (isZero ? 'text-white/25 hover:text-white/80 hover:bg-white/10 hover:' : 'text-white/85 hover:text-white hover:bg-purple-500/10 hover:') : ''}
-                              ${byteVal === null ? 'text-white/10' : ''}
-                            `}
+                            className={`cursor-pointer px-0.5 rounded transition-all text-center select-all inline-block w-[21px] relative group text-xs font-mono ${getByteClass(offset, byteVal, isSelected, isPatched)}`}
                           >
                             {hexStr}
                             {isPatched && !isSelected && (
@@ -1271,14 +1352,14 @@ export default function HexEditor({
         {showToolsPanel && (
           <div className="w-full xl:w-[400px] bg-[#0d111a]/85 border border-white/5 rounded-2xl flex flex-col overflow-hidden shrink-0 shadow-2xl h-[420px] xl:h-auto">
             {/* Panel Tabs */}
-            <div className="flex border-b border-white/5 bg-black/20 text-white/50 shrink-0">
+            <div className="flex border-b border-white/5 bg-black/20 text-white/50 shrink-0 overflow-x-auto hide-scrollbar">
               <button 
                 onClick={() => setActiveToolTab('search')}
-                className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center border-b-2 transition-all ${
+                className={`px-3 py-3 text-[11px] font-semibold flex items-center justify-center border-b-2 transition-all shrink-0 ${
                   activeToolTab === 'search' ? 'border-purple-500 text-white bg-white/5' : 'border-transparent hover:text-white'
                 }`}
               >
-                <Search className="w-3.5 h-3.5 mr-1" />
+                <Search className="w-3 h-3 mr-1" />
                 Tìm/Sửa
               </button>
               <button 
@@ -1286,11 +1367,11 @@ export default function HexEditor({
                   setActiveToolTab('structures');
                   loadStructures();
                 }}
-                className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center border-b-2 transition-all ${
+                className={`px-3 py-3 text-[11px] font-semibold flex items-center justify-center border-b-2 transition-all shrink-0 ${
                   activeToolTab === 'structures' ? 'border-purple-500 text-white bg-white/5' : 'border-transparent hover:text-white'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5 mr-1" />
+                <Layers className="w-3 h-3 mr-1" />
                 Cấu trúc
               </button>
               <button 
@@ -1298,11 +1379,11 @@ export default function HexEditor({
                   setActiveToolTab('history');
                   loadHistoryAndPatches();
                 }}
-                className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center border-b-2 transition-all ${
+                className={`px-3 py-3 text-[11px] font-semibold flex items-center justify-center border-b-2 transition-all shrink-0 ${
                   activeToolTab === 'history' ? 'border-purple-500 text-white bg-white/5' : 'border-transparent hover:text-white'
                 }`}
               >
-                <History className="w-3.5 h-3.5 mr-1" />
+                <History className="w-3 h-3 mr-1" />
                 Patches
               </button>
               <button 
@@ -1310,12 +1391,23 @@ export default function HexEditor({
                   setActiveToolTab('checksums');
                   loadHashesAndEntropy();
                 }}
-                className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center border-b-2 transition-all ${
+                className={`px-3 py-3 text-[11px] font-semibold flex items-center justify-center border-b-2 transition-all shrink-0 ${
                   activeToolTab === 'checksums' ? 'border-purple-500 text-white bg-white/5' : 'border-transparent hover:text-white'
                 }`}
               >
-                <Activity className="w-3.5 h-3.5 mr-1" />
+                <Activity className="w-3 h-3 mr-1" />
                 Phân tích
+              </button>
+              <button 
+                onClick={() => {
+                  setActiveToolTab('beginner' as any);
+                }}
+                className={`px-3 py-3 text-[11px] font-semibold flex items-center justify-center border-b-2 transition-all shrink-0 ${
+                  (activeToolTab as string) === 'beginner' ? 'border-pink-500 text-white bg-white/5 font-bold' : 'border-transparent hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3 h-3 mr-1 text-pink-400" />
+                Nhập môn
               </button>
             </div>
 
@@ -1680,6 +1772,127 @@ export default function HexEditor({
                       </div>
                     )}
                     <p className="text-[9px] text-white/30 text-center leading-relaxed">Vùng biểu đồ cao (gần 8.0) đại diện cho tệp nén/mã hóa. Vùng thấp (gần 0) đại diện cho khối dữ liệu trống hoặc chuỗi byte rỗng (padding).</p>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: Beginner Mode (Nhập môn) */}
+              {(activeToolTab as string) === 'beginner' && (
+                <div className="space-y-4 text-xs">
+                  <div className="bg-pink-500/5 p-3 rounded-xl border border-pink-500/15 text-xs text-pink-300 leading-relaxed space-y-1.5 animate-fadeIn">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-pink-400 animate-pulse shrink-0" />
+                      <strong className="font-bold">Trợ Lý Nhập Môn WebHexed 🌸</strong>
+                    </div>
+                    <p>Chào mừng bạn! WebHexed biến dữ liệu nhị phân khô khan thành biểu đồ trực quan, giúp người mới cũng có thể đọc hiểu và sửa tệp dễ dàng.</p>
+                  </div>
+
+                  {/* Byte Detail Inspector */}
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3.5 space-y-3">
+                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-white/50">Chi Tiết Byte Được Chọn</h4>
+                    {miniSheetOffset !== null ? (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40">Địa chỉ (Offset):</span>
+                          <span className="font-mono text-purple-400 font-bold bg-purple-500/10 px-2 py-0.5 rounded">
+                            0x{miniSheetOffset.toString(16).toUpperCase()} ({miniSheetOffset.toLocaleString()})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40">Giá trị Hexadecimal:</span>
+                          <span className="font-mono text-green-400 font-bold">
+                            {(miniSheetByteValue ?? 0).toString(16).toUpperCase().padStart(2, '0')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40">Hệ Thập phân (Decimal):</span>
+                          <span className="font-mono text-blue-400 font-bold">
+                            {miniSheetByteValue ?? 0}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40">Nhị phân (Binary):</span>
+                          <span className="font-mono text-yellow-400">
+                            {(miniSheetByteValue ?? 0).toString(2).padStart(8, '0')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40">Ký tự ASCII:</span>
+                          <span className="font-mono text-pink-300 font-bold bg-pink-500/10 px-2 py-0.5 rounded">
+                            {(miniSheetByteValue ?? 0) >= 32 && (miniSheetByteValue ?? 0) <= 126 ? String.fromCharCode(miniSheetByteValue ?? 0) : 'Ký tự ẩn / Điều khiển'}
+                          </span>
+                        </div>
+
+                        {/* Smart Suggestion for current offset */}
+                        <div className="border-t border-white/5 pt-2.5 mt-1 space-y-1">
+                          <span className="text-[10px] uppercase font-bold text-white/40 block">💡 Gợi Ý Chỉnh Sửa An Toàn:</span>
+                          {(() => {
+                            if (analysis) {
+                              const match = analysis.structure?.find((s: any) => miniSheetOffset >= s.start && miniSheetOffset < s.end);
+                              if (match) {
+                                if (match.type === 'header') {
+                                  return (
+                                    <p className="text-red-400 text-[11px] leading-relaxed">
+                                      ⚠️ <strong>Cảnh Báo Header:</strong> Byte này thuộc File Header định dạng ({match.name}). Sửa đổi có thể làm hỏng tệp, khiến hệ điều hành không thể mở được nữa!
+                                    </p>
+                                  );
+                                }
+                                if (match.type === 'metadata') {
+                                  return (
+                                    <p className="text-amber-400 text-[11px] leading-relaxed">
+                                      ℹ️ <strong>Thông tin metadata:</strong> Đây là siêu dữ liệu đi kèm. Sửa ở đây để đổi thông số ghi chú, bản quyền, ngày tạo mà không hại cấu trúc tệp.
+                                    </p>
+                                  );
+                                }
+                              }
+
+                              const isStr = analysis.strings?.some((s: any) => miniSheetOffset >= s.offset && miniSheetOffset < s.offset + s.length);
+                              if (isStr) {
+                                return (
+                                  <p className="text-blue-300 text-[11px] leading-relaxed">
+                                    ✅ <strong>Vùng Chuỗi Chữ (String):</strong> Byte này nằm trong một từ/chuỗi ký tự hiển thị. Bạn có thể sửa đổi thoải mái để đổi chữ hoặc đoạn text trong tệp!
+                                  </p>
+                                );
+                              }
+                            }
+                            return (
+                              <p className="text-white/55 text-[11px] leading-relaxed">
+                                Byte này thuộc phần thân dữ liệu thô (payload). Việc sửa có thể làm thay đổi nhẹ nội dung tệp (như điểm ảnh, âm thanh) nhưng không làm sập định dạng.
+                              </p>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-white/30 text-center py-4">Nhấp vào một byte bất kỳ trong bảng Hex bên trái để xem phân tích chi tiết và gợi ý an toàn.</p>
+                    )}
+                  </div>
+
+                  {/* Cheat sheet dictionary */}
+                  <div className="bg-black/20 border border-white/5 rounded-xl p-3 space-y-2">
+                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-pink-400 font-semibold">Thuật Ngữ Nhập Môn</h4>
+                    <div className="space-y-2 divide-y divide-white/[0.03] text-[11px]">
+                      <div className="pt-1.5">
+                        <strong className="text-white font-semibold">1. Hex (Hexadecimal) là gì?</strong>
+                        <p className="text-white/50 leading-relaxed">Là hệ đếm cơ số 16 (0-9 và A-F). Mỗi byte gồm 2 ký tự Hex (ví dụ: <code>FF</code> = 255). Máy tính dùng Hex để rút ngắn mã nhị phân dài dòng.</p>
+                      </div>
+                      <div className="pt-2">
+                        <strong className="text-white font-semibold">2. Offset (Địa chỉ) là gì?</strong>
+                        <p className="text-white/50 leading-relaxed">Là số thứ tự định vị byte trong tệp. Ví dụ offset <code>0x00000010</code> nghĩa là byte thứ 16 tính từ đầu tệp.</p>
+                      </div>
+                      <div className="pt-2">
+                        <strong className="text-white font-semibold">3. ASCII là gì?</strong>
+                        <p className="text-white/50 leading-relaxed">Là bảng quy chuẩn dịch các con số byte thành ký tự chữ đọc được bằng mắt người (A, B, C, @, ...).</p>
+                      </div>
+                      <div className="pt-2">
+                        <strong className="text-white font-semibold">4. Cấu trúc File (Magic Bytes)</strong>
+                        <p className="text-white/50 leading-relaxed">Vài byte đầu tệp xác định loại file. Ví dụ tệp PNG luôn bắt đầu bằng <code>89 50 4E 47</code>. Đổi byte này sẽ khiến file đổi dạng thô.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

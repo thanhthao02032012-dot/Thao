@@ -7,7 +7,9 @@ import {
   Key, Network, HelpCircle, HardDrive, Cpu, Table, ShieldAlert, Check, RefreshCw, Undo2, Redo2, Download, Upload,
   Settings, Hexagon, Search
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { AnalysisResult } from '../utils/fileAnalyzer';
+import { StringsRegistry } from '../utils/stringsRegistry';
 import { useUI } from './UIProvider';
 
 interface OverviewTabProps {
@@ -98,6 +100,148 @@ export default function OverviewTab({
   if (analysis?.detectedItems.video) detectedModules.push('video');
   if (analysis?.detectedItems.text) detectedModules.push('text');
   if (analysis?.detectedItems.databases) detectedModules.push('database');
+
+  const getSmartInsights = () => {
+    const insights: Array<{ text: string; type: 'success' | 'info' | 'warning' | 'danger' }> = [];
+    const nameLower = file.name.toLowerCase();
+    const ext = nameLower.split('.').pop() || '';
+    
+    // 1. Save game
+    if (ext === 'sav' || ext === 'save' || nameLower.includes('savegame') || (file.size < 1024 * 1024 && ext === 'dat')) {
+      insights.push({ text: "Đây có khả năng là file save game.", type: 'warning' });
+    }
+    // 2. Texture
+    if (analysis?.detectedItems.images || ['png', 'jpg', 'jpeg', 'dds', 'tga', 'gif', 'bmp', 'webp'].includes(ext)) {
+      insights.push({ text: "Có texture / tài nguyên hình ảnh.", type: 'success' });
+    }
+    // 3. Model
+    if (['obj', 'fbx', '3ds', 'gltf', 'glb', 'stl', 'mesh', 'dae'].includes(ext) || nameLower.includes('model')) {
+      insights.push({ text: "Có mô hình 3D / model.", type: 'success' });
+    }
+    // 4. Audio
+    if (analysis?.detectedItems.audio || ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) {
+      insights.push({ text: "Có tệp tin âm thanh / audio.", type: 'success' });
+    }
+    // 5. Script
+    if (['lua', 'js', 'py', 'sh', 'bat', 'ps1', 'ts', 'go', 'rs'].includes(ext) || (analysis?.strings && analysis.strings.some(s => s.type === 'lua' || s.type === 'javascript' as any))) {
+      insights.push({ text: "Có kịch bản lập trình / script.", type: 'info' });
+    }
+    // 6. Shader
+    if (['glsl', 'hlsl', 'spv', 'vertex', 'fragment', 'geom'].includes(ext) || (analysis?.strings && analysis.strings.some(s => s.value.includes('#version') || s.value.includes('precision highp') || s.value.includes('uniform ')))) {
+      insights.push({ text: "Có lập trình đổ bóng / shader.", type: 'info' });
+    }
+    // 7. Config
+    if (['ini', 'cfg', 'conf', 'json', 'xml', 'yaml', 'yml'].includes(ext) || analysis?.fileType?.includes('JSON') || analysis?.fileType?.includes('XML')) {
+      insights.push({ text: "Có tệp cấu hình / configuration.", type: 'info' });
+    }
+    // 8. SQLite
+    if (analysis?.detectedItems.databases || ext === 'db' || ext === 'sqlite' || analysis?.fileType?.includes('SQLite')) {
+      insights.push({ text: "Có cơ sở dữ liệu SQLite.", type: 'success' });
+    }
+    // 9. JSON
+    if (analysis?.fileType?.includes('JSON') || (analysis?.strings && analysis.strings.some(s => s.type === 'json'))) {
+      insights.push({ text: "Có định dạng cấu trúc JSON.", type: 'success' });
+    }
+    // 10. Compressed
+    const isCompressed = (analysis as any)?.deepScan?.stageResults?.compression?.isCompressed || ['zip', 'rar', '7z', 'gz', 'tar'].includes(ext);
+    if (isCompressed) {
+      insights.push({ text: "Có vùng nén / dữ liệu nén.", type: 'warning' });
+    }
+    // 11. Suspicious
+    if (analysis?.entropy && analysis.entropy > 7.9) {
+      insights.push({ text: "Có vùng đáng nghi (Mật độ Entropy cực cao - nghi ngờ mã hóa hoặc bảo mật).", type: 'danger' });
+    }
+    
+    if (insights.length === 0) {
+      insights.push({ text: "Tệp tin có dạng nhị phân thô thông thường.", type: 'info' });
+    }
+    return insights;
+  };
+
+  const insights = getSmartInsights();
+
+  // AI Copilot State
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+  const [customQuestion, setCustomQuestion] = useState('');
+
+  const handleAskAI = async (questionText?: string) => {
+    const q = questionText || customQuestion;
+    if (!q.trim()) return;
+
+    setIsAiAnalyzing(true);
+    setAiAnalysis('');
+
+    try {
+      // 1. Get search strategy from AI
+      let relevantSnippets: string[] = [];
+      try {
+        const searchRes = await fetch('/api/strings/ai-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q })
+        });
+        
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const keywords = searchData.keywords || [];
+          const regexes = (searchData.regexes || []).map((r: string) => {
+            try { return new RegExp(r, 'i'); } catch (e) { return null; }
+          }).filter((r: any) => r !== null);
+          
+          const allStrings = StringsRegistry.getAll();
+          const MAX_RESULTS = 50;
+          for (let i = 0; i < allStrings.length; i++) {
+            const s = allStrings[i];
+            let matched = false;
+            for (const rx of regexes) {
+              if (rx.test(s.value)) { matched = true; break; }
+            }
+            if (!matched && keywords.length > 0) {
+              const lowerVal = s.value.toLowerCase();
+              for (const kw of keywords) {
+                if (lowerVal.includes(kw.toLowerCase())) { matched = true; break; }
+              }
+            }
+            if (matched) {
+              relevantSnippets.push(`[Offset 0x${s.offset.toString(16).toUpperCase()}] ${s.value}`);
+              if (relevantSnippets.length >= MAX_RESULTS) break;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Fast search failed, proceeding without string snippets", err);
+      }
+
+      const res = await fetch('/api/file/ai-analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          filesize: file.size,
+          fileType: analysis?.fileType,
+          entropy: analysis?.entropy,
+          insights: insights.map(ins => ins.text),
+          question: q,
+          fileContent: relevantSnippets.length > 0 ? relevantSnippets.join('\n') : undefined
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Yêu cầu phân tích AI thất bại');
+      }
+
+      const data = await res.json();
+      setAiAnalysis(data.analysis || 'Không có phản hồi từ AI.');
+    } catch (err: any) {
+      console.error(err);
+      toast("Lỗi Trợ lý AI: " + (err.message || "Không thể kết nối tới máy chủ AI."), "error");
+    } finally {
+      setIsAiAnalyzing(false);
+    }
+  };
 
   return (
     <div className="space-y-5 text-left pb-10 font-sans">
@@ -206,33 +350,65 @@ export default function OverviewTab({
         
         {/* Left Column: Smart Edit & Analysis */}
         <div className="space-y-5">
-          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm">
-            <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest mb-4">Phân tích thông minh</h3>
+          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm space-y-4">
+            <div>
+              <h3 className="text-xs font-bold text-white/40 uppercase tracking-widest">Phân tích thông minh</h3>
+              <p className="text-[11px] text-white/30 mt-0.5">Nhận diện định dạng, cấu trúc và đặc trưng tệp tự động</p>
+            </div>
             
-            {detectedModules.length > 0 ? (
-              <div className="space-y-3">
-                {detectedModules.map(mod => (
-                  <button 
-                    key={mod}
-                    onClick={() => {
-                      if (mod === 'image' || mod === 'audio' || mod === 'video') onNavigateTab('media');
-                      else if (mod === 'text') onNavigateTab('content');
-                      else if (mod === 'database') onNavigateTab('structure');
-                      else onNavigateTab('edit');
-                    }}
-                    className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-all group"
+            {/* 1. Deep Diagnostics Insights list */}
+            <div className="space-y-2 border-b border-white/5 pb-4">
+              {insights.map((insight, idx) => {
+                const colors = {
+                  success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                  info: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+                  warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  danger: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }[insight.type];
+
+                const bulletColors = {
+                  success: 'bg-emerald-400 shadow-emerald-400/50',
+                  info: 'bg-sky-400 shadow-sky-400/50',
+                  warning: 'bg-amber-400 shadow-amber-400/50',
+                  danger: 'bg-rose-400 shadow-rose-400/50'
+                }[insight.type];
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={`flex items-center space-x-2.5 p-3 rounded-xl border text-xs font-medium leading-relaxed ${colors}`}
                   >
-                    <div className="flex items-center space-x-3">
-                      {getSmartToolIcon(mod)}
-                      <span className="text-sm font-medium text-white/90">{getSmartToolName(mod)}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/60 transition-colors" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center p-6 text-white/30 text-sm">
-                Đang quét hoặc không tìm thấy dữ liệu có cấu trúc.
+                    <span className={`w-2 h-2 rounded-full shrink-0 shadow-[0_0_8px_rgba(0,0,0,0.5)] ${bulletColors}`} />
+                    <span>{insight.text}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. Detected modules shortcut buttons */}
+            {detectedModules.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono font-bold text-white/30 uppercase block">Công cụ phân tích đề xuất:</span>
+                <div className="grid grid-cols-1 gap-2">
+                  {detectedModules.map(mod => (
+                    <button 
+                      key={mod}
+                      onClick={() => {
+                        if (mod === 'image' || mod === 'audio' || mod === 'video') onNavigateTab('media');
+                        else if (mod === 'text') onNavigateTab('content');
+                        else if (mod === 'database') onNavigateTab('structure');
+                        else onNavigateTab('edit');
+                      }}
+                      className="w-full flex items-center justify-between p-3.5 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/[0.03] group text-left cursor-pointer"
+                    >
+                      <div className="flex items-center space-x-3">
+                        {getSmartToolIcon(mod)}
+                        <span className="text-xs font-medium text-white/95">{getSmartToolName(mod)}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/60 transition-colors" />
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -314,11 +490,98 @@ export default function OverviewTab({
               </p>
               <button 
                 onClick={() => onChangePerfMode('professional')}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-900/20 flex items-center justify-center"
+                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-900/20 flex items-center justify-center cursor-pointer"
               >
                 Kích hoạt Full Analysis
               </button>
             </div>
+          </div>
+
+          {/* AI Binary Analyst Chat */}
+          <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Trợ lý Phân tích AI</h3>
+                  <p className="text-[10px] text-white/30 mt-0.5">Khám phá cấu trúc và độ an toàn của tệp</p>
+                </div>
+              </div>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            </div>
+
+            {/* Quick Prompts */}
+            <div className="space-y-2">
+              <span className="text-[9px] font-mono font-bold text-white/30 uppercase block">Câu hỏi gợi ý:</span>
+              <div className="grid grid-cols-1 gap-1.5">
+                {[
+                  "Phân tích tổng quan và cấu trúc nhị phân của tệp này",
+                  "Giải nghĩa mức độ entropy và đánh giá độ an toàn bảo mật",
+                  "Khuyến nghị phương pháp khai thác/chỉnh sửa trong WebHexed"
+                ].map((promptText, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setCustomQuestion(promptText);
+                      handleAskAI(promptText);
+                    }}
+                    disabled={isAiAnalyzing}
+                    className="w-full text-left p-2.5 bg-white/5 hover:bg-purple-500/10 hover:border-purple-500/20 rounded-xl text-[10px] text-white/70 hover:text-purple-300 transition-all border border-transparent cursor-pointer leading-snug"
+                  >
+                    {promptText}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Input form */}
+            <div className="flex items-center space-x-2 bg-black/40 border border-white/5 p-1.5 rounded-xl">
+              <input
+                type="text"
+                placeholder="Hỏi trợ lý AI bất cứ điều gì về tệp này..."
+                value={customQuestion}
+                onChange={(e) => setCustomQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAskAI();
+                }}
+                disabled={isAiAnalyzing}
+                className="flex-1 bg-transparent px-3 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none"
+              />
+              <button
+                onClick={() => handleAskAI()}
+                disabled={isAiAnalyzing || !customQuestion.trim()}
+                className="p-2 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:opacity-50 text-white rounded-lg transition-all cursor-pointer shrink-0"
+              >
+                {isAiAnalyzing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ArrowRight className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+
+            {/* AI Response Viewer */}
+            {(isAiAnalyzing || aiAnalysis) && (
+              <div className="bg-black/20 rounded-xl p-4 border border-white/[0.03] space-y-3">
+                <div className="flex items-center space-x-1.5 border-b border-white/5 pb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest">Phản hồi của Trợ lý AI</span>
+                </div>
+                
+                {isAiAnalyzing ? (
+                  <div className="flex items-center space-x-3 py-6 justify-center">
+                    <RefreshCw className="w-4 h-4 text-purple-400 animate-spin" />
+                    <span className="text-xs text-white/40 italic">Đang phân tích cấu trúc nhị phân...</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-white/80 leading-relaxed max-h-[300px] overflow-y-auto pr-1 select-text font-sans prose prose-invert prose-xs">
+                    <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         
