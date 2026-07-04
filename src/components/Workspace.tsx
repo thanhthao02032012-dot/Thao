@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutGrid, FileText, Image, AlignLeft, Info, Workflow, Search, Sliders,
   Plus, X, Download, Grid, ArrowRight, CheckCircle, Cpu, ShieldCheck, Play, Pause, Trash2, FileCode, Sparkles, Fingerprint, Activity, Loader2,
-  Circle, RefreshCw, AlertTriangle, XCircle, Beaker, ShieldAlert, Terminal, Check, Bookmark, Settings, Eye, EyeOff, Save, Shield, HelpCircle, Flame, ExternalLink, ChevronRight, RefreshCcw, LogOut, Layers
+  Circle, RefreshCw, AlertTriangle, XCircle, Beaker, ShieldAlert, Terminal, Check, Bookmark, Settings, Eye, EyeOff, Save, Shield, HelpCircle, Flame, ExternalLink, ChevronRight, RefreshCcw, LogOut, Layers,
+  GitBranch
 } from 'lucide-react';
 import { useUI } from './UIProvider';
 import { downloadPatchedFileStream } from '../utils/fileStream';
@@ -27,6 +28,7 @@ const DnaTab = React.lazy(() => import('./DnaTab'));
 const HexEditor = React.lazy(() => import('./HexEditor'));
 const AiAnalysisTab = React.lazy(() => import('./AiAnalysisTab'));
 const UniversalEngineTab = React.lazy(() => import('./UniversalEngineTab'));
+const BvcsTab = React.lazy(() => import('./BvcsTab'));
 
 import BottomStatusLine from './BottomStatusLine';
 import FloatingMenuFAB from './FloatingMenuFAB';
@@ -970,6 +972,7 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
               {[
                 { id: 'overview', label: 'Dashboard', icon: LayoutGrid },
                 { id: 'ai_analysis', label: 'AI Chat', icon: Sparkles },
+                { id: 'bvcs', label: 'Binary Git (BVCS)', icon: GitBranch },
                 { id: 'edit', label: 'Workspace', icon: FileCode },
                 { id: 'scan_pipeline', label: 'Deep Scan', icon: ShieldCheck },
                 { id: 'universal_engine', label: 'Engine Hub', icon: Cpu },
@@ -1522,6 +1525,26 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         }
                       }}
                     />
+                  )}
+
+                  {/* Binary Version Control System (BVCS) */}
+                  {activeTab === 'bvcs' && (
+                    <React.Suspense fallback={
+                      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3 bg-[#0B0F14]">
+                        <RefreshCw className="w-7 h-7 text-[#3B82F6] animate-spin" />
+                        <p className="text-xs text-[#94A3B8]">Spawning Binary Git (BVCS) Instance...</p>
+                      </div>
+                    }>
+                      <BvcsTab
+                        file={activeFile}
+                        virtualFileSize={activeFileSize}
+                        patches={activePatches}
+                        onApplyPatches={handleApplyBulkPatches}
+                        onClearPatches={() => setActivePatches(new Map())}
+                        onSetVirtualFileSize={setVirtualFileSize}
+                        analysisResult={analysisResult}
+                      />
+                    </React.Suspense>
                   )}
 
                   {/* Bookmarks view */}

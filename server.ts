@@ -7,7 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import { getGeminiClient, generateContentWithRetry, extractTextFromResponse } from './src/lib/gemini';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Body parsing middleware for JSON endpoints
 app.use(express.json({ limit: '50mb' }));
