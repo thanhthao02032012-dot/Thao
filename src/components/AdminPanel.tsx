@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { UserProfile } from '../types';
 import { 
   User, Shield, ShieldAlert, ShieldCheck, Edit3, X, 
-  Search, Check, RefreshCw, AlertCircle, Ban, ArrowLeft
+  Search, Check, RefreshCw, AlertCircle, Ban, ArrowLeft, Wrench
 } from 'lucide-react';
 import { useUI } from './UIProvider';
 import { useLanguage } from './LanguageProvider';
@@ -27,6 +27,12 @@ export default function AdminPanel({ onBack, currentUserUid }: AdminPanelProps) 
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
   const [editBanned, setEditBanned] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // System Maintenance configuration states
+  const [maintenance, setMaintenance] = useState(false);
+  const [msgVi, setMsgVi] = useState('');
+  const [msgEn, setMsgEn] = useState('');
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -65,7 +71,45 @@ export default function AdminPanel({ onBack, currentUserUid }: AdminPanelProps) 
 
   useEffect(() => {
     fetchUsers();
+    
+    // Fetch system maintenance configuration
+    const fetchMaintenance = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'system', 'settings'));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setMaintenance(!!data.maintenance);
+          setMsgVi(data.maintenanceMessageVi || 'Hệ thống đang được bảo trì định kỳ để nâng cấp hiệu năng. Vui lòng quay lại sau.');
+          setMsgEn(data.maintenanceMessageEn || 'The system is undergoing scheduled maintenance to improve performance. Please check back later.');
+        } else {
+          setMsgVi('Hệ thống đang được bảo trì định kỳ để nâng cấp hiệu năng. Vui lòng quay lại sau.');
+          setMsgEn('The system is undergoing scheduled maintenance to improve performance. Please check back later.');
+        }
+      } catch (err) {
+        console.error("Error fetching maintenance settings:", err);
+      }
+    };
+    fetchMaintenance();
   }, []);
+
+  const handleSaveMaintenance = async () => {
+    setSavingMaintenance(true);
+    try {
+      await setDoc(doc(db, 'system', 'settings'), {
+        maintenance,
+        maintenanceMessageVi: msgVi.trim(),
+        maintenanceMessageEn: msgEn.trim(),
+        updatedAt: Date.now(),
+        updatedBy: currentUserUid
+      }, { merge: true });
+      toast(language === 'vi' ? 'Cập nhật cấu hình bảo trì hệ thống thành công!' : 'System maintenance configuration updated successfully!', 'success');
+    } catch (err) {
+      console.error("Error saving maintenance config:", err);
+      toast(language === 'vi' ? 'Lỗi khi cập nhật cấu hình bảo trì!' : 'Failed to update maintenance configuration!', 'error');
+    } finally {
+      setSavingMaintenance(false);
+    }
+  };
 
   const handleOpenEdit = (user: UserProfile) => {
     setSelectedUser(user);
@@ -174,6 +218,89 @@ export default function AdminPanel({ onBack, currentUserUid }: AdminPanelProps) 
         <div className="bg-[#121829] border border-white/5 rounded-2xl p-5 text-left">
           <p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">{language === 'vi' ? 'Tài Khoản Bị Khóa' : 'Banned Users'}</p>
           <p className="text-2xl font-mono font-bold text-red-400 mt-1">{bannedCount}</p>
+        </div>
+      </div>
+
+      {/* System Maintenance Control Board */}
+      <div className="bg-[#121829] border border-white/10 rounded-2xl p-6 text-left space-y-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-2 h-full bg-amber-500/80" />
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center border border-amber-500/20 text-amber-400 shrink-0">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                {language === 'vi' ? 'Cấu hình Bảo trì Hệ thống' : 'System Maintenance Settings'}
+              </h3>
+              <p className="text-[10px] text-white/40 mt-0.5">
+                {language === 'vi' ? 'Khi kích hoạt, mọi người dùng không phải Admin sẽ ngay lập tức bị chặn và hiển thị màn hình bảo trì.' : 'When enabled, all non-admin users will immediately be blocked and presented with the maintenance screen.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 bg-black/20 px-4 py-2.5 rounded-xl border border-white/5">
+            <span className={`text-[11px] font-bold tracking-wider uppercase ${maintenance ? 'text-amber-400' : 'text-white/40'}`}>
+              {maintenance ? (language === 'vi' ? 'ĐANG BẢO TRÌ' : 'MAINTENANCE ON') : (language === 'vi' ? 'HOẠT ĐỘNG THƯỜNG' : 'NORMAL LIVE')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMaintenance(!maintenance)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                maintenance ? 'bg-amber-500' : 'bg-white/10'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  maintenance ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-white/40">
+              {language === 'vi' ? 'Thông báo Bảo trì (Tiếng Việt)' : 'Maintenance Message (Vietnamese)'}
+            </label>
+            <textarea
+              value={msgVi}
+              onChange={(e) => setMsgVi(e.target.value)}
+              rows={3}
+              placeholder="Nhập thông điệp hiển thị bằng Tiếng Việt..."
+              className="w-full px-3 py-2.5 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-xs text-white placeholder-white/25 resize-none font-sans"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-white/40">
+              {language === 'vi' ? 'Thông báo Bảo trì (Tiếng Anh)' : 'Maintenance Message (English)'}
+            </label>
+            <textarea
+              value={msgEn}
+              onChange={(e) => setMsgEn(e.target.value)}
+              rows={3}
+              placeholder="Enter English maintenance notice message..."
+              className="w-full px-3 py-2.5 bg-black/20 border border-white/10 rounded-xl focus:outline-none focus:border-amber-500 text-xs text-white placeholder-white/25 resize-none font-sans"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={handleSaveMaintenance}
+            disabled={savingMaintenance}
+            className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all flex items-center shadow-md shadow-amber-600/10 cursor-pointer"
+          >
+            {savingMaintenance ? (
+              <RefreshCw className="w-3.5 h-3.5 mr-2 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5 mr-2" />
+            )}
+            {language === 'vi' ? 'Áp dụng chế độ bảo trì' : 'Apply Maintenance Changes'}
+          </button>
         </div>
       </div>
 

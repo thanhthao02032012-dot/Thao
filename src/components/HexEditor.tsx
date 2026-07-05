@@ -94,6 +94,11 @@ export default function HexEditor({
   const [selectedOffset, setSelectedOffset] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
+  // States for direct bottom panel input
+  const [panelHexInput, setPanelHexInput] = useState('');
+  const [panelDecInput, setPanelDecInput] = useState('');
+  const [panelCharInput, setPanelCharInput] = useState('');
+
   // Refs for virtual scrolling & debounce
   const containerRef = useRef<HTMLDivElement>(null);
   const pendingFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -784,6 +789,20 @@ export default function HexEditor({
     return parseInt(editValue || '00', 16) || 0;
   }, [selectedOffset, editValue, version]);
 
+  // Synchronize bottom panel inputs with selected byte
+  useEffect(() => {
+    if (selectedOffset !== null) {
+      const hex = activeByteVal.toString(16).toUpperCase().padStart(2, '0');
+      setPanelHexInput(hex);
+      setPanelDecInput(activeByteVal.toString());
+      setPanelCharInput(activeByteVal >= 32 && activeByteVal <= 126 ? String.fromCharCode(activeByteVal) : '');
+    } else {
+      setPanelHexInput('');
+      setPanelDecInput('');
+      setPanelCharInput('');
+    }
+  }, [selectedOffset, activeByteVal]);
+
   const getByteClass = (offset: number, byteVal: number | null, isSelected: boolean, isPatched: boolean) => {
     if (byteVal === null) return 'text-white/10';
     if (isSelected) return 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold ring-2 ring-purple-400 z-10 scale-115 animate-pulse';
@@ -1105,18 +1124,11 @@ export default function HexEditor({
                             onClick={() => {
                               if (byteVal === null) return;
                               onSelectOffset?.(offset);
-                              const now = Date.now();
-                              const gap = now - lastClickTimeRef.current;
-                              if (gap < 250 && lastClickedOffsetRef.current === offset) {
-                                setSelectedOffset(offset);
-                                setEditValue(hexStr);
-                                if (navigator.vibrate) navigator.vibrate(10);
-                              } else {
-                                setMiniSheetOffset(offset);
-                                setMiniSheetByteValue(byteVal);
-                              }
-                              lastClickTimeRef.current = now;
-                              lastClickedOffsetRef.current = offset;
+                              setSelectedOffset(offset);
+                              setEditValue(hexStr);
+                              setMiniSheetOffset(offset);
+                              setMiniSheetByteValue(byteVal);
+                              if (navigator.vibrate) navigator.vibrate(10);
                             }}
                             className={`cursor-pointer px-0.5 rounded transition-all text-center select-all inline-block w-[21px] relative group text-xs font-mono ${getByteClass(offset, byteVal, isSelected, isPatched)}`}
                           >
@@ -1150,7 +1162,17 @@ export default function HexEditor({
                         return (
                           <span
                             key={c}
-                            className={`w-[10px] text-center rounded transition-all text-xs font-mono
+                            onClick={() => {
+                              if (byteVal === null) return;
+                              const hexStr = byteVal.toString(16).toUpperCase().padStart(2, '0');
+                              onSelectOffset?.(offset);
+                              setSelectedOffset(offset);
+                              setEditValue(hexStr);
+                              setMiniSheetOffset(offset);
+                              setMiniSheetByteValue(byteVal);
+                              if (navigator.vibrate) navigator.vibrate(10);
+                            }}
+                            className={`w-[10px] text-center rounded transition-all text-xs font-mono cursor-pointer
                               ${isSelected ? 'text-purple-300 font-bold bg-purple-500/30 scale-110 ' : ''}
                               ${isPatched && !isSelected ? 'bg-emerald-950/30 text-emerald-300 font-bold border border-emerald-500/30' : ''}
                               ${!isSelected && !isPatched && byteVal !== null ? (isZero ? 'text-white/15' : 'text-white/55 hover:text-white hover:bg-white/5') : ''}
@@ -1227,6 +1249,98 @@ export default function HexEditor({
                     <span className="text-white/30 mx-0.5">.</span>
                     <span className="text-indigo-400 font-bold">{activeByteVal.toString(2).padStart(8, '0').slice(4, 8)}</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Direct Value Editor Form */}
+              <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h4 className="text-[11px] uppercase tracking-wider font-bold text-white/50">Sửa đổi giá trị byte nhanh (Quick Value Editor)</h4>
+                  <p className="text-[10px] text-white/40">Nhập trực tiếp giá trị mới ở một trong các định dạng dưới đây và nhấn Áp Dụng.</p>
+                </div>
+                
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col space-y-1">
+                    <span className="text-[9px] uppercase tracking-wider text-white/30 font-mono">Hex (00-FF)</span>
+                    <input
+                      type="text"
+                      value={panelHexInput}
+                      maxLength={2}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+                        setPanelHexInput(val);
+                        const parsed = parseInt(val, 16);
+                        if (!isNaN(parsed) && parsed >= 0 && parsed <= 255) {
+                          setPanelDecInput(parsed.toString());
+                          setPanelCharInput(parsed >= 32 && parsed <= 126 ? String.fromCharCode(parsed) : '');
+                        } else {
+                          setPanelDecInput('');
+                          setPanelCharInput('');
+                        }
+                      }}
+                      placeholder="FF"
+                      className="w-16 h-8.5 bg-black/40 border border-white/10 rounded-xl text-center font-mono font-bold text-xs text-purple-300 focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                    />
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <span className="text-[9px] uppercase tracking-wider text-white/30 font-mono">Dec (0-255)</span>
+                    <input
+                      type="text"
+                      value={panelDecInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setPanelDecInput(val);
+                        const parsed = parseInt(val, 10);
+                        if (!isNaN(parsed) && parsed >= 0 && parsed <= 255) {
+                          setPanelHexInput(parsed.toString(16).toUpperCase().padStart(2, '0'));
+                          setPanelCharInput(parsed >= 32 && parsed <= 126 ? String.fromCharCode(parsed) : '');
+                        } else {
+                          setPanelHexInput('');
+                          setPanelCharInput('');
+                        }
+                      }}
+                      placeholder="255"
+                      className="w-20 h-8.5 bg-black/40 border border-white/10 rounded-xl text-center font-mono font-bold text-xs text-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                    />
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <span className="text-[9px] uppercase tracking-wider text-white/30 font-mono">Ký tự (Char)</span>
+                    <input
+                      type="text"
+                      value={panelCharInput}
+                      maxLength={1}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPanelCharInput(val);
+                        if (val.length === 1) {
+                          const code = val.charCodeAt(0);
+                          setPanelHexInput(code.toString(16).toUpperCase().padStart(2, '0'));
+                          setPanelDecInput(code.toString());
+                        } else {
+                          setPanelHexInput('');
+                          setPanelDecInput('');
+                        }
+                      }}
+                      placeholder="A"
+                      className="w-16 h-8.5 bg-black/40 border border-white/10 rounded-xl text-center font-mono font-bold text-xs text-pink-300 focus:outline-none focus:ring-1 focus:ring-pink-500/50"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!panelHexInput) return;
+                      const valStr = panelHexInput.padStart(2, '0');
+                      handleByteEdit(selectedOffset!, valStr);
+                      toast('✓ Đã cập nhật giá trị byte thành công!', 'success');
+                      if (navigator.vibrate) navigator.vibrate([20, 20]);
+                    }}
+                    disabled={!panelHexInput || panelHexInput.length === 0}
+                    className="h-8.5 px-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/15 flex items-center space-x-1 cursor-pointer shrink-0 animate-fadeIn"
+                  >
+                    <span>Áp dụng</span>
+                  </button>
                 </div>
               </div>
 

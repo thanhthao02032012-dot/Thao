@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { FileUp, LogOut, ShieldAlert, Monitor, Home, Loader2, Menu, X, ChevronRight, Bookmark, Beaker, Shield, Clock, Globe, Settings, HelpCircle, ShieldCheck, FileCode, Search, User as UserIcon } from 'lucide-react';
+import { FileUp, LogOut, ShieldAlert, Monitor, Home, Loader2, Menu, X, ChevronRight, Bookmark, Beaker, Shield, Clock, Globe, Settings, HelpCircle, ShieldCheck, FileCode, Search, User as UserIcon, Wrench } from 'lucide-react';
 import Auth from './components/Auth';
 import Workspace from './components/Workspace';
 import Dashboard from './components/Dashboard';
@@ -52,6 +52,15 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Real-time Maintenance States
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [maintenanceConfig, setMaintenanceConfig] = useState<{
+    maintenance: boolean;
+    maintenanceMessageVi?: string;
+    maintenanceMessageEn?: string;
+  } | null>(null);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -68,6 +77,34 @@ export default function App() {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Sync Global System Settings (Maintenance Mode) in real-time
+  useEffect(() => {
+    const unsubSettings = onSnapshot(doc(db, 'system', 'settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMaintenanceConfig({
+          maintenance: !!data.maintenance,
+          maintenanceMessageVi: data.maintenanceMessageVi || 'Hệ thống đang được bảo trì định kỳ để nâng cấp hiệu năng. Vui lòng quay lại sau.',
+          maintenanceMessageEn: data.maintenanceMessageEn || 'The system is undergoing scheduled maintenance to improve performance. Please check back later.',
+        });
+        setMaintenanceMode(!!data.maintenance);
+      } else {
+        setMaintenanceConfig({
+          maintenance: false,
+          maintenanceMessageVi: 'Hệ thống đang được bảo trì định kỳ để nâng cấp hiệu năng. Vui lòng quay lại sau.',
+          maintenanceMessageEn: 'The system is undergoing scheduled maintenance to improve performance. Please check back later.',
+        });
+        setMaintenanceMode(false);
+      }
+    }, (err) => {
+      console.warn("Could not retrieve system settings in real-time:", err);
+    });
+
+    return () => {
+      unsubSettings();
+    };
   }, []);
 
   useEffect(() => {
@@ -98,6 +135,16 @@ export default function App() {
                 navigate('/auth');
                 toast(language === 'vi' ? "Tài khoản của bạn đã bị cấm bởi Admin." : "Your account has been banned by Admin.", "error");
               } else {
+                // Self-heal: ensure the owner's email has the admin role in the DB
+                if (currentUser.email === 'thanhthao02032012@gmail.com' && profileData.role !== 'admin') {
+                  profileData.role = 'admin';
+                  try {
+                    await setDoc(docRef, { role: 'admin' }, { merge: true });
+                  } catch (e) {
+                    console.error("Failed to self-heal admin role:", e);
+                  }
+                }
+
                 setUser(currentUser);
                 setUserProfile(profileData);
                 setBanned(false);
@@ -285,6 +332,88 @@ export default function App() {
     );
   }
 
+  // Intercept normal flow if maintenance mode is active and user is not admin
+  const isBypassed = userProfile?.role === 'admin' || location.pathname === '/auth';
+  const shouldBlockForMaintenance = maintenanceMode && !isBypassed;
+
+  if (shouldBlockForMaintenance) {
+    return (
+      <div className="min-h-screen bg-[#070b13] text-white flex items-center justify-center p-6 relative overflow-hidden">
+        <PremiumBackground />
+        
+        {/* Glowing atmospheric details */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+        
+        <div className="relative z-10 w-full max-w-lg bg-[#0e1424]/80 backdrop-blur-md border border-amber-500/20 rounded-3xl p-8 md:p-10 text-center shadow-2xl space-y-6">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#121829] border border-amber-500/30 w-16 h-16 rounded-2xl flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20">
+            <Wrench className="w-8 h-8 animate-pulse" />
+          </div>
+
+          <div className="space-y-2 pt-4">
+            <h1 className="text-2xl font-black tracking-widest text-white uppercase font-sans">
+              WebHexed
+            </h1>
+            <div className="inline-flex items-center space-x-1 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full text-[10px] font-bold tracking-widest uppercase">
+              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping mr-1"></span>
+              {language === 'vi' ? 'Hệ thống đang bảo trì' : 'System under maintenance'}
+            </div>
+          </div>
+
+          <p className="text-xs text-white/70 bg-black/30 border border-white/5 p-5 rounded-2xl leading-relaxed text-left font-sans">
+            {language === 'vi' 
+              ? (maintenanceConfig?.maintenanceMessageVi || 'Hệ thống đang được bảo trì định kỳ để nâng cấp hiệu năng. Vui lòng quay lại sau.')
+              : (maintenanceConfig?.maintenanceMessageEn || 'The system is undergoing scheduled maintenance to improve performance. Please check back later.')}
+          </p>
+
+          <div className="flex items-center justify-between border-t border-white/5 pt-5 gap-4">
+            {/* Language Switcher */}
+            <button
+              onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl text-xs font-semibold cursor-pointer transition-all duration-150 shrink-0"
+            >
+              <span>{language === 'vi' ? '🇻🇳' : '🇬🇧'}</span>
+              <span className="uppercase text-[9px] font-mono font-bold">{language === 'vi' ? 'VI' : 'EN'}</span>
+            </button>
+
+            <div className="flex gap-2">
+              {/* Go to Login bypass */}
+              <button
+                onClick={async () => {
+                  if (user) {
+                    try {
+                      await signOut(auth);
+                    } catch (err) {
+                      console.error("Error signing out:", err);
+                    }
+                  }
+                  navigate('/auth');
+                }}
+                className="px-3.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white/60 hover:text-white transition-all rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                {language === 'vi' ? 'Quản trị viên' : 'Admin Login'}
+              </button>
+              
+              {/* Force refresh */}
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                {language === 'vi' ? 'Tải lại' : 'Reload'}
+              </button>
+            </div>
+          </div>
+
+          {/* Connected live indicator */}
+          <div className="flex items-center justify-center space-x-2 text-[10px] text-white/30 font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>{language === 'vi' ? 'Kết nối thời gian thực trực tuyến...' : 'Live settings synchronization active...'}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (banned) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#0B0F19] p-4 text-center">
@@ -306,6 +435,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#09090B] text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col relative overflow-hidden">
       <PremiumBackground />
+
+      {/* Admin Maintenance Warning Bar */}
+      {maintenanceMode && userProfile?.role === 'admin' && (
+        <div className="bg-amber-500 text-black text-xs font-bold py-2 px-4 text-center flex items-center justify-center space-x-2 z-50 select-none shadow-md shrink-0">
+          <Wrench className="w-3.5 h-3.5 animate-pulse" />
+          <span>
+            {language === 'vi' 
+              ? 'HỆ THỐNG ĐANG TRONG CHẾ ĐỘ BẢO TRÌ (CHỈ ADMIN TRUY CẬP)' 
+              : 'SYSTEM IS UNDER MAINTENANCE MODE (ADMIN ACCESS ONLY)'}
+          </span>
+        </div>
+      )}
 
       <Routes>
         {/* Auth Route */}

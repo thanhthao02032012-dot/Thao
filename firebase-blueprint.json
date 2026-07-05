@@ -32,9 +32,25 @@
         "displayName": { "type": "string" },
         "email": { "type": "string" }
       }
+    },
+    "SystemSetting": {
+      "title": "System Setting",
+      "description": "Global settings for the application.",
+      "type": "object",
+      "properties": {
+        "maintenance": { "type": "boolean" },
+        "maintenanceMessageEn": { "type": "string" },
+        "maintenanceMessageVi": { "type": "string" },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string" }
+      }
     }
   },
   "firestore": {
+    "/system/{settingId}": {
+      "schema": "SystemSetting",
+      "description": "Global application system settings and configurations."
+    },
     "/users/{userId}/files/{fileId}/chat_messages/{messageId}": {
       "schema": "ChatMessage",
       "description": "Legacy messages sent in the AI analysis tab for a specific file."

@@ -4,14 +4,22 @@ service cloud.firestore {
     
     // Helper function to check if the current user is an admin
     function isAdmin() {
-      return request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && (
+        request.auth.token.email == 'thanhthao02032012@gmail.com' ||
+        request.auth.token.email == 'admin@webhexed.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       allow read, write: if isAdmin();
+    }
+
+    match /system/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /users/{userId}/files/{fileId}/chat_messages/{messageId} {
