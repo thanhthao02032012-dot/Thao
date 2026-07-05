@@ -10,13 +10,42 @@
         "timestamp": { "type": "number" },
         "actions": { "type": "array" }
       },
-      "required": ["role", "text", "timestamp"]
+      "required": ["role", "text"]
+    },
+    "ChatThread": {
+      "title": "Chat Thread",
+      "description": "A conversation thread associated with a analyzed file.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["title", "lastActive"]
+    },
+    "User": {
+      "title": "User Profile",
+      "description": "User account settings and status.",
+      "type": "object",
+      "properties": {
+        "banned": { "type": "boolean" },
+        "role": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" }
+      }
     }
   },
   "firestore": {
     "/users/{userId}/files/{fileId}/chat_messages/{messageId}": {
       "schema": "ChatMessage",
-      "description": "Messages sent in the AI analysis tab for a specific file."
+      "description": "Legacy messages sent in the AI analysis tab for a specific file."
+    },
+    "/users/{userId}/files/{fileId}/chat_threads/{threadId}": {
+      "schema": "ChatThread",
+      "description": "Conversation threads for a specific file."
+    },
+    "/users/{userId}/files/{fileId}/chat_threads/{threadId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages sent in a specific chat thread."
     }
   }
 }
