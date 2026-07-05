@@ -4,15 +4,26 @@ import {
   LayoutGrid, FileText, Image, AlignLeft, Info, Workflow, Search, Sliders,
   Plus, X, Download, Grid, ArrowRight, CheckCircle, Cpu, ShieldCheck, Play, Pause, Trash2, FileCode, Sparkles, Fingerprint, Activity, Loader2,
   Circle, RefreshCw, AlertTriangle, XCircle, Beaker, ShieldAlert, Terminal, Check, Bookmark, Settings, Eye, EyeOff, Save, Shield, HelpCircle, Flame, ExternalLink, ChevronRight, RefreshCcw, LogOut, Layers,
-  GitBranch
+  GitBranch, Bot, Database
 } from 'lucide-react';
 import { useUI } from './UIProvider';
+import { useLanguage } from './LanguageProvider';
 import { downloadPatchedFileStream } from '../utils/fileStream';
 import { useSearchParams } from 'react-router-dom';
 import { startAnalysisWorker, performDeepAnalysis, AnalysisResult } from '../utils/fileAnalyzer';
 import { ScannerPipeline } from '../utils/scannerPipeline';
 import { getAnalysisCache, storeAnalysisCache } from '../utils/db';
 import { StringsRegistry } from '../utils/stringsRegistry';
+import { db, auth } from '../firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot,
+  doc,
+  setDoc
+} from 'firebase/firestore';
 
 // Lazy-loaded sub-tabs to maximize speed and free up RAM
 const OverviewTab = React.lazy(() => import('./OverviewTab'));
@@ -27,6 +38,7 @@ const SmartEditTab = React.lazy(() => import('./SmartEditTab'));
 const DnaTab = React.lazy(() => import('./DnaTab'));
 const HexEditor = React.lazy(() => import('./HexEditor'));
 const AiAnalysisTab = React.lazy(() => import('./AiAnalysisTab'));
+const AiAgentTab = React.lazy(() => import('./AiAgentTab'));
 const UniversalEngineTab = React.lazy(() => import('./UniversalEngineTab'));
 const BvcsTab = React.lazy(() => import('./BvcsTab'));
 
@@ -51,6 +63,7 @@ interface FileItem {
 
 export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps) {
   const { toast } = useUI();
+  const { language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
   
@@ -196,6 +209,193 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
 
   // Mounted tabs for caching DOM
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(new Set([activeTab]));
+
+  // AI Chat Thread states and sync
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [chatThreads, setChatThreads] = useState<any[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string>('default');
+  const hasSetInitialActiveThreadRef = useRef<Record<string, boolean>>({});
+  const [isBanned, setIsBanned] = useState(false);
+
+  useEffect(() => {
+    let unsubscribeBan: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      
+      if (unsubscribeBan) {
+        unsubscribeBan();
+        unsubscribeBan = null;
+      }
+      
+      if (user) {
+        unsubscribeBan = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data && data.banned === true) {
+              setIsBanned(true);
+            } else {
+              setIsBanned(false);
+            }
+          } else {
+            setIsBanned(false);
+          }
+        }, (err) => {
+          console.error("Error subscribing to user doc for bans:", err);
+        });
+      } else {
+        setIsBanned(false);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeBan) unsubscribeBan();
+    };
+  }, []);
+
+  const handleUnbanSelf = async () => {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, 'users', currentUser.uid), { banned: false }, { merge: true });
+      setIsBanned(false);
+      toast(language === 'vi' ? 'Hủy khóa tài khoản thành công! Bạn có quyền truy cập trở lại.' : 'Account unbanned successfully! Access has been restored.', 'success');
+    } catch (err: any) {
+      console.error("Error unbanning self:", err);
+      toast(language === 'vi' ? 'Lỗi khi hủy khóa tài khoản.' : 'Error unbanning account.', 'error');
+    }
+  };
+
+  const handleBannedSignOut = async () => {
+    setIsBanned(false);
+    await auth.signOut();
+  };
+
+  useEffect(() => {
+    if (!activeFile) return;
+    const fileId = `${activeFile.name}-${activeFile.size}`.replace(/[^a-zA-Z0-9]/g, '_');
+
+    let unsubscribeFirestore: (() => void) | null = null;
+
+    if (currentUser) {
+      try {
+        const threadsColRef = collection(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`);
+        const q = query(threadsColRef, orderBy('lastActive', 'desc'));
+        
+        unsubscribeFirestore = onSnapshot(q, async (snapshot) => {
+          const loadedThreads: any[] = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            loadedThreads.push({
+              id: doc.id,
+              title: data.title || 'Trò chuyện',
+              lastActive: data.lastActive || Date.now()
+            });
+          });
+          
+          const sessionKey = `webhexed_session_initialized_${currentUser.uid}_${fileId}`;
+          const isSessionInitialized = sessionStorage.getItem(sessionKey);
+
+          if (loadedThreads.length > 0) {
+            setChatThreads(loadedThreads);
+            
+            if (!isSessionInitialized) {
+              sessionStorage.setItem(sessionKey, 'true');
+              const newId = `thread_${Date.now()}`;
+              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+              const dateStr = new Date().toLocaleDateString('vi-VN');
+              const newThread = {
+                id: newId,
+                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
+                lastActive: Date.now()
+              };
+              
+              setChatThreads(prev => [newThread, ...prev]);
+              setActiveThreadId(newId);
+              
+              try {
+                await setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, newId), {
+                  title: newThread.title,
+                  lastActive: newThread.lastActive
+                });
+              } catch (err) {
+                console.error("Error auto-creating session thread:", err);
+              }
+            } else if (!hasSetInitialActiveThreadRef.current[fileId]) {
+              setActiveThreadId(loadedThreads[0].id);
+            }
+          } else {
+            sessionStorage.setItem(sessionKey, 'true');
+            const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
+            setChatThreads([defaultThread]);
+            setActiveThreadId('default');
+            setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, 'default'), {
+              title: defaultThread.title,
+              lastActive: defaultThread.lastActive
+            }).catch(err => console.error(err));
+          }
+          hasSetInitialActiveThreadRef.current[fileId] = true;
+        }, (err) => {
+          console.error("Firestore threads sync error:", err);
+        });
+      } catch (err) {
+        console.error("Error setting up Firestore threads listener:", err);
+      }
+    } else {
+      const loadLocalThreads = () => {
+        try {
+          const threadsKey = `webhexed_chat_threads_${fileId}`;
+          const savedThreads = localStorage.getItem(threadsKey);
+          
+          const sessionKey = `webhexed_session_initialized_guest_${fileId}`;
+          const isSessionInitialized = sessionStorage.getItem(sessionKey);
+
+          if (savedThreads) {
+            const loaded = JSON.parse(savedThreads);
+            loaded.sort((a: any, b: any) => b.lastActive - a.lastActive);
+            setChatThreads(loaded);
+
+            if (!isSessionInitialized) {
+              sessionStorage.setItem(sessionKey, 'true');
+              const newId = `thread_${Date.now()}`;
+              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+              const dateStr = new Date().toLocaleDateString('vi-VN');
+              const newThread = {
+                id: newId,
+                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
+                lastActive: Date.now()
+              };
+              const updated = [newThread, ...loaded];
+              setChatThreads(updated);
+              setActiveThreadId(newId);
+              localStorage.setItem(threadsKey, JSON.stringify(updated));
+            } else if (!hasSetInitialActiveThreadRef.current[fileId]) {
+              setActiveThreadId(loaded[0].id);
+            }
+          } else {
+            sessionStorage.setItem(sessionKey, 'true');
+            const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
+            setChatThreads([defaultThread]);
+            setActiveThreadId('default');
+            localStorage.setItem(threadsKey, JSON.stringify([defaultThread]));
+          }
+          hasSetInitialActiveThreadRef.current[fileId] = true;
+        } catch (err) {
+          console.error("Local threads load error:", err);
+        }
+      };
+
+      loadLocalThreads();
+      window.addEventListener('storage', loadLocalThreads);
+      return () => {
+        window.removeEventListener('storage', loadLocalThreads);
+      };
+    }
+
+    return () => {
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
+  }, [currentUser, activeFile]);
 
   useEffect(() => {
     setMountedTabs(prev => {
@@ -968,10 +1168,11 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
         {/* 2. LEFT COLLAPSIBLE SIDEBAR */}
         {!isMobile && (
           <div className={`bg-[#11161D] border-r border-[#2A313C] flex flex-col justify-between shrink-0 transition-all duration-200 ${sidebarExpanded ? 'w-44' : 'w-12'}`}>
-            <div className="flex flex-col py-2">
+            <div className="flex flex-col py-2 overflow-y-auto custom-scrollbar flex-1">
               {[
                 { id: 'overview', label: 'Dashboard', icon: LayoutGrid },
                 { id: 'ai_analysis', label: 'AI Chat', icon: Sparkles },
+                { id: 'ai_agent', label: 'AI Agent (Next-Gen)', icon: Bot },
                 { id: 'bvcs', label: 'Binary Git (BVCS)', icon: GitBranch },
                 { id: 'edit', label: 'Workspace', icon: FileCode },
                 { id: 'scan_pipeline', label: 'Deep Scan', icon: ShieldCheck },
@@ -989,24 +1190,63 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                 const Icon = tab.icon;
                 const isSelected = activeTab === tab.id;
                 return (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      setActiveTab(tab.id);
-                      setShowAnalysisSummary(false);
-                    }}
-                    className={`w-full py-2 flex items-center transition-colors relative ${
-                      isSelected 
-                        ? 'bg-[#171C23] text-[#3B82F6] font-bold border-l-2 border-l-[#3B82F6]' 
-                        : 'text-[#94A3B8]/70 hover:text-[#E8EAF0] hover:bg-[#171C23]/40'
-                    } ${sidebarExpanded ? 'px-3 justify-start space-x-3' : 'justify-center'}`}
-                    title={tab.label}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {sidebarExpanded && (
-                      <span className="text-xs tracking-tight truncate">{tab.label}</span>
+                  <React.Fragment key={tab.id}>
+                    <button
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setShowAnalysisSummary(false);
+                      }}
+                      className={`w-full py-2 flex items-center transition-colors relative ${
+                        isSelected 
+                          ? 'bg-[#171C23] text-[#3B82F6] font-bold border-l-2 border-l-[#3B82F6]' 
+                          : 'text-[#94A3B8]/70 hover:text-[#E8EAF0] hover:bg-[#171C23]/40'
+                      } ${sidebarExpanded ? 'px-3 justify-start space-x-3' : 'justify-center'}`}
+                      title={tab.label}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {sidebarExpanded && (
+                        <span className="text-xs tracking-tight truncate">{tab.label}</span>
+                      )}
+                    </button>
+
+                    {/* AI Chat Threads list in Menu */}
+                    {tab.id === 'ai_analysis' && sidebarExpanded && chatThreads.length > 0 && (
+                      <div className="pl-6 pr-2 py-1 space-y-1 bg-black/10 border-l border-[#2A313C] ml-5 my-1">
+                        {chatThreads.slice(0, 5).map((thread) => {
+                          const isThreadActive = activeTab === 'ai_analysis' && activeThreadId === thread.id;
+                          return (
+                            <button
+                              key={thread.id}
+                              onClick={() => {
+                                setActiveThreadId(thread.id);
+                                setActiveTab('ai_analysis');
+                                setShowAnalysisSummary(false);
+                              }}
+                              className={`w-full text-left py-1 px-1.5 rounded text-[10px] truncate block transition-all ${
+                                isThreadActive
+                                  ? 'bg-[#172030] text-blue-400 font-semibold border-l border-blue-500/40 pl-2'
+                                  : 'text-[#94A3B8]/60 hover:text-[#E8EAF0] hover:bg-[#171C23]/30'
+                              }`}
+                              title={thread.title}
+                            >
+                              • {thread.title}
+                            </button>
+                          );
+                        })}
+                        {chatThreads.length > 5 && (
+                          <button
+                            onClick={() => {
+                              setActiveTab('ai_analysis');
+                              setShowAnalysisSummary(false);
+                            }}
+                            className="w-full text-left py-0.5 px-1.5 text-[9px] text-[#3B82F6] hover:underline"
+                          >
+                            Xem tất cả ({chatThreads.length})
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </button>
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -1508,6 +1748,12 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                       analysisResult={analysisResult}
                       pipelineContext={pipelineContext}
                       bookmarks={bookmarks}
+                      threads={chatThreads}
+                      setThreads={setChatThreads}
+                      activeThreadId={activeThreadId}
+                      setActiveThreadId={setActiveThreadId}
+                      patches={activePatches}
+                      virtualFileSize={activeFileSize}
                       onAction={(action, payload) => {
                         if (action === 'open_tab') {
                           setActiveTab(payload.tabId);
@@ -1525,6 +1771,26 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
                         }
                       }}
                     />
+                  )}
+
+                  {/* AI Agent System Next Gen */}
+                  {activeTab === 'ai_agent' && (
+                    <React.Suspense fallback={
+                      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3 bg-[#0B0F14]">
+                        <Loader2 className="w-8 h-8 text-[#3B82F6] animate-spin" />
+                        <p className="text-xs text-[#94A3B8]">Spawning AI Agent System Instance...</p>
+                      </div>
+                    }>
+                      <AiAgentTab
+                        file={activeFile}
+                        virtualFileSize={activeFileSize}
+                        patches={activePatches}
+                        onApplyPatches={handleApplyBulkPatches}
+                        onClearPatches={() => setActivePatches(new Map())}
+                        onSetVirtualFileSize={setVirtualFileSize}
+                        analysisResult={analysisResult}
+                      />
+                    </React.Suspense>
                   )}
 
                   {/* Binary Version Control System (BVCS) */}
@@ -1917,6 +2183,80 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
             </div>
           </div>
         )}
+
+      {/* Real-time Ban / Account Locked Overlay */}
+      <AnimatePresence>
+        {isBanned && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-[#0c0f1d] border border-red-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full text-center space-y-6 shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-red-500 via-orange-500 to-red-500"></div>
+              
+              <div className="mx-auto w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center text-red-500 animate-pulse">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              
+              <div className="space-y-2">
+                <h2 className="text-xl font-extrabold tracking-tight text-white font-sans uppercase">
+                  {language === 'vi' ? 'Tài Khoản Đã Bị Vô Hiệu Hóa' : 'Account Suspended'}
+                </h2>
+                <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+                  <span className="text-[9px] font-mono font-bold uppercase text-red-400 tracking-widest">
+                    Real-time Lock
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-xs text-white/60 leading-relaxed font-sans text-center px-2">
+                {language === 'vi' 
+                  ? 'Hệ thống đã kích hoạt chế độ khóa bảo mật thời gian thực trên Firestore do tài khoản của bạn nhận tín hiệu khóa khẩn cấp hoặc bị Quản trị viên vô hiệu hóa (banned: true).'
+                  : 'The system has activated real-time safety lockdown on Firestore because your account received an emergency lockout signal or was disabled by an Administrator.'}
+              </p>
+
+              {/* Owner Security Verification Pathway */}
+              <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl text-left space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 font-sans block flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {language === 'vi' ? 'Xác Minh Khôi Phục Khẩn Cấp:' : 'Emergency Self-Service Recovery:'}
+                </span>
+                <p className="text-[10px] text-white/50 leading-relaxed font-sans">
+                  {language === 'vi'
+                    ? 'Bạn có thể thực hiện xác minh danh tính chủ sở hữu tài khoản để tự động giải trừ trạng thái khóa khẩn cấp và khôi phục quyền truy cập vào Workspace ngay lập tức.'
+                    : 'You can perform direct identity ownership verification to automatically de-escalate the lockout and restore full access to your Workspace.'}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  onClick={handleUnbanSelf}
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 shadow-lg shadow-emerald-950/20"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{language === 'vi' ? 'Xác minh & Mở khóa' : 'Verify & Unlock'}</span>
+                </button>
+                
+                <button
+                  onClick={handleBannedSignOut}
+                  className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{language === 'vi' ? 'Đăng xuất' : 'Sign Out'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <DevPerformanceBoard />
     </div>

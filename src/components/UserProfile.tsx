@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   User, Mail, Shield, Calendar, Edit2, Save, ArrowLeft, 
-  Activity, Check, Cloud, Key, HardDrive
+  Activity, Check, Cloud, Key, HardDrive, ShieldAlert, Ban
 } from 'lucide-react';
 import { UserProfile as ProfileType } from '../types';
 import { doc, setDoc } from 'firebase/firestore';
@@ -219,6 +219,46 @@ export default function UserProfile({ user, profile, onUpdateProfile, onBack }: 
                     : 'Your account and preferences are securely encrypted and synchronized across environments using Firebase cloud auth architecture. Changes take effect globally.'}
                 </p>
               </div>
+            </div>
+
+            {/* Professional Emergency Account Lock Feature */}
+            <div className="p-5 bg-red-500/5 border border-red-500/20 rounded-3xl space-y-4 mt-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full blur-2xl -mr-8 -mt-8"></div>
+              <div className="flex items-start space-x-3.5 relative z-10">
+                <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-red-400 tracking-tight font-sans">
+                    {language === 'vi' ? 'Khóa Tài Khoản Khẩn Cấp (Emergency Lock)' : 'Emergency Account Lockout'}
+                  </h4>
+                  <p className="text-[11px] text-white/50 mt-1.5 leading-relaxed font-sans">
+                    {language === 'vi'
+                      ? 'Tính năng bảo mật tối cao cho phép bạn tự kích hoạt chế độ khóa tài khoản trực tiếp trên Firestore để ngăn chặn rò rỉ dữ liệu khi phát hiện nghi ngờ có xâm nhập. Hệ thống giám sát Real-time sẽ lập tức kích hoạt màn hình khóa và chấm dứt phiên làm việc trên mọi thiết bị.'
+                      : 'A high-security control allowing you to instantly trigger an account-wide lockout directly on Firestore to safeguard your data. Real-time synchronization will immediately enforce the lock screen on all active devices.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (confirm(language === 'vi' 
+                    ? 'CẢNH BÁO: Bạn có chắc chắn muốn KÍCH HOẠT CHẾ ĐỘ KHÓA KHẨN CẤP? Tài khoản của bạn sẽ bị vô hiệu hóa ngay lập tức trên hệ thống!' 
+                    : 'WARNING: Are you sure you want to ACTIVATE EMERGENCY LOCKOUT? Your account will be immediately disabled across the platform!')) {
+                    try {
+                      const docRef = doc(db, 'users', profile.uid);
+                      await setDoc(docRef, { banned: true }, { merge: true });
+                      toast(language === 'vi' ? 'Đã kích hoạt chế độ Khóa khẩn cấp thành công!' : 'Emergency Lockout activated successfully!', 'success');
+                    } catch (err: any) {
+                      console.error("Error activating emergency lockout:", err);
+                      toast(language === 'vi' ? 'Không thể cập nhật Firestore. Vui lòng kiểm tra kết nối.' : 'Unable to update Firestore. Check connection.', 'error');
+                    }
+                  }
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 hover:scale-[1.01] active:scale-[0.99] font-sans relative z-10"
+              >
+                <Ban className="w-4 h-4" />
+                <span>{language === 'vi' ? 'Kích hoạt Khóa khẩn cấp ngay' : 'Activate Emergency Lockout'}</span>
+              </button>
             </div>
           </div>
 
