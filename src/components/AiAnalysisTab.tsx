@@ -83,7 +83,7 @@ export default function AiAnalysisTab({
   const activeThreadId = passedActiveThreadId !== undefined ? passedActiveThreadId : localActiveThreadId;
   const setActiveThreadId = passedSetActiveThreadId !== undefined ? passedSetActiveThreadId : setLocalActiveThreadId;
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -163,34 +163,11 @@ export default function AiAnalysisTab({
 
           if (loadedThreads.length > 0) {
             setThreads(loadedThreads);
-            if (!isSessionInitialized) {
-              sessionStorage.setItem(sessionKey, 'true');
-              const newId = `thread_${Date.now()}`;
-              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const dateStr = new Date().toLocaleDateString('vi-VN');
-              const newThread = {
-                id: newId,
-                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
-                lastActive: Date.now()
-              };
-              setThreads([newThread, ...loadedThreads]);
-              setActiveThreadId(newId);
-              await setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, newId), {
-                title: newThread.title,
-                lastActive: newThread.lastActive
-              });
-            } else {
-              setActiveThreadId(loadedThreads[0].id);
-            }
+            setActiveThreadId(loadedThreads[0].id);
           } else {
-            sessionStorage.setItem(sessionKey, 'true');
             const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
             setThreads([defaultThread]);
             setActiveThreadId('default');
-            await setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, 'default'), {
-              title: defaultThread.title,
-              lastActive: defaultThread.lastActive
-            });
           }
         } catch (err) {
           console.error("Error loading threads from Firestore:", err);
@@ -200,32 +177,13 @@ export default function AiAnalysisTab({
         try {
           const threadsKey = `webhexed_chat_threads_${fileId}`;
           const savedThreads = localStorage.getItem(threadsKey);
-          const sessionKey = `webhexed_session_initialized_guest_${fileId}`;
-          const isSessionInitialized = sessionStorage.getItem(sessionKey);
 
           if (savedThreads) {
             const loaded = JSON.parse(savedThreads) as ChatThread[];
             loaded.sort((a, b) => b.lastActive - a.lastActive);
             setThreads(loaded);
-            if (!isSessionInitialized) {
-              sessionStorage.setItem(sessionKey, 'true');
-              const newId = `thread_${Date.now()}`;
-              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const dateStr = new Date().toLocaleDateString('vi-VN');
-              const newThread = {
-                id: newId,
-                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
-                lastActive: Date.now()
-              };
-              const updated = [newThread, ...loaded];
-              setThreads(updated);
-              setActiveThreadId(newId);
-              localStorage.setItem(threadsKey, JSON.stringify(updated));
-            } else {
-              setActiveThreadId(loaded[0].id);
-            }
+            setActiveThreadId(loaded[0].id);
           } else {
-            sessionStorage.setItem(sessionKey, 'true');
             const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
             setThreads([defaultThread]);
             setActiveThreadId('default');

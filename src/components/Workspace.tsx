@@ -298,41 +298,13 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
 
           if (loadedThreads.length > 0) {
             setChatThreads(loadedThreads);
-            
-            if (!isSessionInitialized) {
-              sessionStorage.setItem(sessionKey, 'true');
-              const newId = `thread_${Date.now()}`;
-              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const dateStr = new Date().toLocaleDateString('vi-VN');
-              const newThread = {
-                id: newId,
-                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
-                lastActive: Date.now()
-              };
-              
-              setChatThreads(prev => [newThread, ...prev]);
-              setActiveThreadId(newId);
-              
-              try {
-                await setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, newId), {
-                  title: newThread.title,
-                  lastActive: newThread.lastActive
-                });
-              } catch (err) {
-                console.error("Error auto-creating session thread:", err);
-              }
-            } else if (!hasSetInitialActiveThreadRef.current[fileId]) {
+            if (!hasSetInitialActiveThreadRef.current[fileId]) {
               setActiveThreadId(loadedThreads[0].id);
             }
           } else {
-            sessionStorage.setItem(sessionKey, 'true');
             const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
             setChatThreads([defaultThread]);
             setActiveThreadId('default');
-            setDoc(doc(db, `users/${currentUser.uid}/files/${fileId}/chat_threads`, 'default'), {
-              title: defaultThread.title,
-              lastActive: defaultThread.lastActive
-            }).catch(err => console.error(err));
           }
           hasSetInitialActiveThreadRef.current[fileId] = true;
         }, (err) => {
@@ -346,34 +318,15 @@ export default function Workspace({ file, fileId = '', onClose }: WorkspaceProps
         try {
           const threadsKey = `webhexed_chat_threads_${fileId}`;
           const savedThreads = localStorage.getItem(threadsKey);
-          
-          const sessionKey = `webhexed_session_initialized_guest_${fileId}`;
-          const isSessionInitialized = sessionStorage.getItem(sessionKey);
 
           if (savedThreads) {
             const loaded = JSON.parse(savedThreads);
             loaded.sort((a: any, b: any) => b.lastActive - a.lastActive);
             setChatThreads(loaded);
-
-            if (!isSessionInitialized) {
-              sessionStorage.setItem(sessionKey, 'true');
-              const newId = `thread_${Date.now()}`;
-              const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const dateStr = new Date().toLocaleDateString('vi-VN');
-              const newThread = {
-                id: newId,
-                title: `Hội thoại mới (${timeStr} - ${dateStr})`,
-                lastActive: Date.now()
-              };
-              const updated = [newThread, ...loaded];
-              setChatThreads(updated);
-              setActiveThreadId(newId);
-              localStorage.setItem(threadsKey, JSON.stringify(updated));
-            } else if (!hasSetInitialActiveThreadRef.current[fileId]) {
+            if (!hasSetInitialActiveThreadRef.current[fileId]) {
               setActiveThreadId(loaded[0].id);
             }
           } else {
-            sessionStorage.setItem(sessionKey, 'true');
             const defaultThread = { id: 'default', title: 'Trò chuyện ban đầu', lastActive: Date.now() };
             setChatThreads([defaultThread]);
             setActiveThreadId('default');

@@ -10,31 +10,32 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Users can read and write their own documents. Admins can manage any user document.
-      allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAdmin();
+    }
 
-      match /files/{fileId}/chat_messages/{messageId} {
-        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
-      }
+    match /users/{userId}/files/{fileId}/chat_messages/{messageId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAdmin();
+    }
 
-      match /files/{fileId}/chat_threads/{threadId} {
-        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+    match /users/{userId}/files/{fileId}/chat_threads/{threadId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAdmin();
+    }
 
-        match /messages/{messageId} {
-          allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
-        }
-      }
+    match /users/{userId}/files/{fileId}/chat_threads/{threadId}/messages/{messageId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAdmin();
     }
 
     match /public_profiles/{userId} {
-      // Anyone can read public profiles (for account email recovery by exact display name query).
-      // Only the owning user or an admin can write/update.
       allow read: if true;
-      allow write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isAdmin();
     }
 
     match /sessions/{sessionId} {
-      // Users can save their login/activity sessions
       allow read, write: if request.auth != null;
     }
 
